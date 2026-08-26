@@ -46,7 +46,12 @@ export default async function ReportsPage() {
                       href={`/reports/${r.id}`}
                       className="block rounded-xl border border-black/10 px-4 py-3 transition-colors hover:bg-black/[0.03] dark:border-white/10 dark:hover:bg-white/[0.05]"
                     >
-                      <p className="font-medium">{r.topic_name}</p>
+                      <p className="font-medium">
+                        {r.topic_name}
+                        <span className="ml-2 rounded-full bg-black/5 px-2 py-0.5 align-middle text-[11px] font-normal text-neutral-500 dark:bg-white/10 dark:text-neutral-400">
+                          {r.range_days > 1 ? `周报 · 近${r.range_days}天` : "日报"}
+                        </span>
+                      </p>
                       <p className="mt-0.5 text-xs text-neutral-400">
                         {sources.length} 条信源 ·{" "}
                         {new Date(r.created_at).toLocaleTimeString("zh-CN", {

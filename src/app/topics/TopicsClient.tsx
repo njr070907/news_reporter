@@ -130,14 +130,14 @@ export default function TopicsClient({ initialTopics }: Props) {
     ]);
   }
 
-  async function generate(topicId: string, force = false) {
-    setGenerating(topicId);
+  async function generate(topicId: string, days: number) {
+    setGenerating(`${topicId}-${days}`);
     setError(null);
     try {
       const res = await fetch("/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ topicId, force }),
+        body: JSON.stringify({ topicId, days }),
       });
       const data = (await res.json()) as { reportId?: string; error?: string };
       if (!res.ok || !data.reportId) {
@@ -183,13 +183,25 @@ export default function TopicsClient({ initialTopics }: Props) {
                 <p className="truncate font-medium">{t.name}</p>
                 <Keywords zh={t.keywordsZh} en={t.keywordsEn} />
               </div>
-              <button
-                onClick={() => generate(t.id)}
-                disabled={generating !== null}
-                className="shrink-0 rounded-full border border-black/15 px-3 py-1 text-xs hover:bg-black/5 disabled:opacity-40 dark:border-white/20 dark:hover:bg-white/10"
-              >
-                {generating === t.id ? "生成中，约 1~3 分钟…" : "生成今日简报"}
-              </button>
+              <div className="flex shrink-0 items-center gap-1 text-xs">
+                <span className="mr-1 hidden text-neutral-400 sm:inline">生成</span>
+                {[1, 7].map((d) => (
+                  <button
+                    key={d}
+                    onClick={() => generate(t.id, d)}
+                    disabled={generating !== null}
+                    className="rounded-full border border-black/15 px-3 py-1 hover:bg-black/5 disabled:opacity-40 dark:border-white/20 dark:hover:bg-white/10"
+                  >
+                    {generating === `${t.id}-${d}`
+                      ? d === 1
+                        ? "生成中…"
+                        : "生成中…"
+                      : d === 1
+                        ? "日报"
+                        : "周报"}
+                  </button>
+                ))}
+              </div>
               <button
                 onClick={() => remove(t)}
                 className="shrink-0 text-xs text-neutral-400 hover:text-red-500"

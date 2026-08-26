@@ -3,7 +3,8 @@ CREATE TABLE IF NOT EXISTS users(
   id TEXT PRIMARY KEY,
   email TEXT UNIQUE NOT NULL,
   name TEXT NOT NULL DEFAULT '',
-  created_at TEXT NOT NULL
+  created_at TEXT NOT NULL,
+  password_hash TEXT
 );
 CREATE TABLE IF NOT EXISTS topics(
   id TEXT PRIMARY KEY,
@@ -21,8 +22,18 @@ CREATE TABLE IF NOT EXISTS reports(
   markdown TEXT NOT NULL,
   sources_json TEXT NOT NULL DEFAULT '[]',
   created_at TEXT NOT NULL,
-  UNIQUE(topic_id, date)
+  range_days INTEGER NOT NULL DEFAULT 1
+);
+CREATE TABLE IF NOT EXISTS feedback(
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  report_id TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  target TEXT,
+  value TEXT NOT NULL,
+  created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_topics_user ON topics(user_id);
 CREATE INDEX IF NOT EXISTS idx_reports_topic ON reports(topic_id, date DESC);
+CREATE INDEX IF NOT EXISTS idx_feedback_user ON feedback(user_id, created_at DESC);
 `;

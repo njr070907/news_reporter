@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import {
-  findReportByDate,
+  findReportByPeriod,
   listActiveTopicsAll,
   saveReport,
   type TopicRow,
@@ -57,7 +57,7 @@ export async function GET(req: Request): Promise<NextResponse> {
       const items = workloads.shift();
       if (!items) break;
       const existingReports = await Promise.all(
-        items.map((i) => findReportByDate(i.id, date)),
+        items.map((i) => findReportByPeriod(i.id, date, 1)),
       );
       if (existingReports.every((r) => r !== undefined)) {
         cached++;
@@ -65,11 +65,14 @@ export async function GET(req: Request): Promise<NextResponse> {
       }
       const first = items[0];
       try {
-        const result = await runPipeline({
-          name: first.name,
-          keywordsZh: JSON.parse(first.keywords_zh) as string[],
-          keywordsEn: JSON.parse(first.keywords_en) as string[],
-        });
+        const result = await runPipeline(
+          {
+            name: first.name,
+            keywordsZh: JSON.parse(first.keywords_zh) as string[],
+            keywordsEn: JSON.parse(first.keywords_en) as string[],
+          },
+          1,
+        );
         const sourcesJson = JSON.stringify(result.sources);
         for (const item of items) {
           await saveReport({
@@ -77,6 +80,7 @@ export async function GET(req: Request): Promise<NextResponse> {
             date,
             markdown: result.markdown,
             sourcesJson,
+            rangeDays: 1,
           });
         }
         generated++;

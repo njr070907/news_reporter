@@ -128,7 +128,25 @@ function extractText(html: string): string {
   return text.slice(0, MAX_CONTENT_CHARS);
 }
 
+function extractImage(html: string, baseUrl: string): string | undefined {
+  try {
+    const $ = cheerio.load(html);
+    const raw =
+      $('meta[property="og:image"]').attr("content") ??
+      $('meta[name="twitter:image"]').attr("content") ??
+      $('meta[name="og:image"]').attr("content") ??
+      $('link[rel="image_src"]').attr("href");
+    if (!raw || !raw.trim()) return undefined;
+    const url = new URL(raw.trim(), baseUrl).toString();
+    if (!/^https?:\/\//.test(url)) return undefined;
+    return url;
+  } catch {
+    return undefined;
+  }
+}
+
 async function fetchContent(a: Article): Promise<boolean> {
+  let gotText = false;
   try {
     const res = await fetch(a.finalUrl ?? a.url, {
       headers: {
@@ -140,15 +158,19 @@ async function fetchContent(a: Article): Promise<boolean> {
       redirect: "follow",
       signal: AbortSignal.timeout(15000),
     });
-    if (!res.ok) return false;
-    if ((a.finalUrl ?? a.url) !== res.url) a.finalUrl = res.url;
-    const text = extractText(await res.text());
-    if (!text) return false;
-    a.content = text;
-    return true;
-  } catch {
-    return false;
-  }
+    if (res.ok) {
+      if ((a.finalUrl ?? a.url) !== res.url) a.finalUrl = res.url;
+      const html = await res.text();
+      const text = extractText(html);
+      if (text) {
+        a.content = text;
+        gotText = true;
+      }
+      const img = extractImage(html, res.url);
+      if (img) a.imageUrl = img;
+    }
+  } catch {}
+  return gotText;
 }
 
 async function mapPool<T>(

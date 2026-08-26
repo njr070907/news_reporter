@@ -78,6 +78,29 @@ body {
   border-color: color-mix(in srgb, var(--foreground) 10%, transparent);
 }
 
+.report-body section > img,
+.report-body p:has(> img) {
+  margin-top: 0.25rem;
+}
+
+.report-body img {
+  display: block;
+  width: 100%;
+  max-height: 380px;
+  object-fit: cover;
+  border-radius: 12px;
+  margin: 0.4rem 0 0.6rem;
+  background-color: color-mix(in srgb, var(--foreground) 5%, transparent);
+}
+
+.report-body a:has(img) {
+  display: block;
+  margin: 0;
+  padding: 0;
+  border: none;
+  white-space: normal;
+}
+
 .report-body a:not(:has(img)) {
   display: inline-block;
   margin: 0.1rem 0.15rem;

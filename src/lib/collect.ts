@@ -17,16 +17,25 @@ function titleKey(title: string): string {
   return title.toLowerCase().replace(/[\W_]+/gu, "").slice(0, 48);
 }
 
-export async function collectArticles(topic: Topic): Promise<CollectResult> {
+export async function collectArticles(
+  topic: Topic,
+  days = 1,
+): Promise<CollectResult> {
   const zhKw = topic.keywordsZh.join(" OR ");
   const enKw = topic.keywordsEn.join(" OR ");
   const jobs: Array<{ label: string; run: () => Promise<Article[]> }> = [];
   if (zhKw) {
-    jobs.push({ label: `google-zh「${zhKw}」`, run: () => fetchGoogleNews(zhKw, "zh") });
+    jobs.push({
+      label: `google-zh「${zhKw}」`,
+      run: () => fetchGoogleNews(zhKw, "zh", days),
+    });
     jobs.push({ label: `bing-zh「${zhKw}」`, run: () => fetchBingNews(zhKw, "zh") });
   }
   if (enKw) {
-    jobs.push({ label: `google-en "${enKw}"`, run: () => fetchGoogleNews(enKw, "en") });
+    jobs.push({
+      label: `google-en "${enKw}"`,
+      run: () => fetchGoogleNews(enKw, "en", days),
+    });
     jobs.push({ label: `bing-en "${enKw}"`, run: () => fetchBingNews(enKw, "en") });
   }
 

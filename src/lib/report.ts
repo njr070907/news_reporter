@@ -15,7 +15,7 @@ export const REPORT_SYSTEM_PROMPT = `你是一名资深新闻编辑，为读者�
    节末固定一行来源标注，列出本节实际引用的全部来源，格式：
    **来源：** [S1 · 媒体名](URL) · [S4 · 媒体名](URL)
 5. 没有正文且标题信息量不足的孤立小消息，不要为它单开一节；可将多条此类消息合并为最后一节「## 其他动态」，每条一句话概括并标注编号。
-6. 报告开头是 "## 今日要点"，给出不超过 5 条一句话 TL;DR，只挑真正重要的，每条末尾标注对应来源编号（如 [S2][S5]）。
+6. 报告开头是 "## 今日要点"（单日简报）或 "## 本周要点"（多日简报，以用户消息标注的简报类型为准），给出不超过 5 条一句话 TL;DR，只挑真正重要的，每条末尾标注对应来源编号（如 [S2][S5]）。
 7. 报告结尾是 "## 信源清单"，按编号逐条列出全部材料，格式：\`- [S1] 标题原文 — 媒体 · 发布时间 · URL\`。
 8. 正文用简体中文写作；专有名词、机构名、产品名可保留原文。
 
@@ -37,7 +37,15 @@ function articleUrl(a: Article): string {
   return a.finalUrl ?? a.url;
 }
 
-export function buildUserPrompt(topic: Topic, articles: Article[]): string {
+export function buildUserPrompt(
+  topic: Topic,
+  articles: Article[],
+  rangeDays = 1,
+): string {
+  const typeLine =
+    rangeDays > 1
+      ? `简报类型：本周简报（覆盖过去 ${rangeDays} 天），开头标题用 "## 本周要点"`
+      : "简报类型：每日简报（覆盖过去 24 小时），开头标题用 \"## 今日要点\"";
   const materials = articles
     .map(
       (a) =>
@@ -48,8 +56,9 @@ export function buildUserPrompt(topic: Topic, articles: Article[]): string {
     `主题：${topic.name}`,
     `中文关键词：${topic.keywordsZh.join("、") || "无"}`,
     `英文关键词：${topic.keywordsEn.join(", ") || "无"}`,
+    typeLine,
     "",
-    `以下是今日采集的 ${articles.length} 条材料：`,
+    `以下是采集到的 ${articles.length} 条材料：`,
     "",
     materials,
   ].join("\n");
@@ -58,11 +67,12 @@ export function buildUserPrompt(topic: Topic, articles: Article[]): string {
 export async function generateReport(
   topic: Topic,
   articles: Article[],
+  rangeDays = 1,
 ): Promise<string> {
   return chat(
     [
       { role: "system", content: REPORT_SYSTEM_PROMPT },
-      { role: "user", content: buildUserPrompt(topic, articles) },
+      { role: "user", content: buildUserPrompt(topic, articles, rangeDays) },
     ],
     { temperature: 0.2 },
   );

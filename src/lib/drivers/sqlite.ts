@@ -5,6 +5,8 @@ import { SCHEMA_SQL } from "../schema";
 
 const g = globalThis as unknown as { __nrSqlite?: DatabaseSync };
 
+type SqlParam = null | number | bigint | string | Uint8Array;
+
 function getClient(): DatabaseSync {
   if (!g.__nrSqlite) {
     const dir = path.join(process.cwd(), "data");
@@ -16,11 +18,44 @@ function getClient(): DatabaseSync {
   return g.__nrSqlite;
 }
 
-type SqlParam = null | number | bigint | string | Uint8Array;
+function columnExists(table: string, column: string): boolean {
+  const rows = getClient()
+    .prepare(`PRAGMA table_info(${table})`)
+    .all() as unknown as Array<{ name: string }>;
+  return rows.some((r) => r.name === column);
+}
+
+function migrate(): void {
+  const db = getClient();
+  if (!columnExists("users", "password_hash")) {
+    db.exec("ALTER TABLE users ADD COLUMN password_hash TEXT");
+  }
+  if (!columnExists("reports", "range_days")) {
+    db.exec(`
+      CREATE TABLE reports_migrated(
+        id TEXT PRIMARY KEY,
+        topic_id TEXT NOT NULL REFERENCES topics(id) ON DELETE CASCADE,
+        date TEXT NOT NULL,
+        markdown TEXT NOT NULL,
+        sources_json TEXT NOT NULL DEFAULT '[]',
+        created_at TEXT NOT NULL,
+        range_days INTEGER NOT NULL DEFAULT 1
+      );
+      INSERT INTO reports_migrated(id, topic_id, date, markdown, sources_json, created_at, range_days)
+        SELECT id, topic_id, date, markdown, sources_json, created_at, 1 FROM reports;
+      DROP TABLE reports;
+      ALTER TABLE reports_migrated RENAME TO reports;
+    `);
+  }
+  db.exec(
+    "CREATE UNIQUE INDEX IF NOT EXISTS ux_reports_topic_date_range ON reports(topic_id, date, range_days)",
+  );
+}
 
 export const sqliteDriver = {
   async init(): Promise<void> {
     getClient().exec(SCHEMA_SQL);
+    migrate();
   },
   async all<T>(sql: string, params: unknown[] = []): Promise<T[]> {
     return getClient()

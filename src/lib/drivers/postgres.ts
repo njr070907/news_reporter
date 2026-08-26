@@ -24,9 +24,25 @@ function getClient(): PgClient {
   return g.__nrPg;
 }
 
+async function migrate(sql: PgClient): Promise<void> {
+  await sql.unsafe("ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT");
+  await sql.unsafe(
+    "ALTER TABLE reports ADD COLUMN IF NOT EXISTS range_days INTEGER NOT NULL DEFAULT 1",
+  );
+  await sql.unsafe(
+    "ALTER TABLE reports DROP CONSTRAINT IF EXISTS reports_topic_id_date_key",
+  );
+  await sql.unsafe("ALTER TABLE reports DROP CONSTRAINT IF EXISTS reports_range_unique");
+  await sql.unsafe(
+    "ALTER TABLE reports ADD CONSTRAINT reports_range_unique UNIQUE(topic_id, date, range_days)",
+  );
+}
+
 export const postgresDriver = {
   async init(): Promise<void> {
-    await getClient().unsafe(SCHEMA_SQL);
+    const sql = getClient();
+    await sql.unsafe(SCHEMA_SQL);
+    await migrate(sql);
   },
   async all<T>(sql: string, params: unknown[] = []): Promise<T[]> {
     return (await getClient().unsafe(toPgQuery(sql), params)) as T[];

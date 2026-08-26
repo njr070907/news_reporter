@@ -12,6 +12,7 @@ interface FeedItem {
   link?: string;
   pubDate?: string;
   description?: string;
+  image?: string;
   source?: { "#text"?: string } | string;
 }
 
@@ -56,6 +57,10 @@ export async function fetchBingNews(query: string, lang: Lang): Promise<Article[
       publishedAt: published && !Number.isNaN(published.getTime()) ? published : null,
       lang,
       snippet: item.description ? stripHtml(item.description) : undefined,
+      imageUrl:
+        typeof item.image === "string" && item.image.startsWith("http")
+          ? item.image
+          : undefined,
     });
   }
   return out;

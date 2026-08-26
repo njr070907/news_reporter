@@ -6,6 +6,7 @@ export interface UserRow {
   email: string;
   name: string;
   created_at: string;
+  password_hash?: string | null;
 }
 
 export interface TopicRow {
@@ -25,6 +26,7 @@ export interface ReportRow {
   markdown: string;
   sources_json: string;
   created_at: string;
+  range_days: number;
 }
 
 interface DbDriver {
@@ -73,19 +75,25 @@ export async function getUserById(id: string): Promise<UserRow | undefined> {
   return db.get<UserRow>("SELECT * FROM users WHERE id = ?", [id]);
 }
 
-export async function createUser(email: string): Promise<UserRow> {
+export async function createUser(email: string, passwordHash?: string): Promise<UserRow> {
   const user: UserRow = {
     id: crypto.randomUUID(),
     email,
     name: email.split("@")[0],
     created_at: nowIso(),
+    password_hash: passwordHash ?? null,
   };
   const db = await getDriver();
   await db.run(
-    "INSERT INTO users(id, email, name, created_at) VALUES(?, ?, ?, ?)",
-    [user.id, user.email, user.name, user.created_at],
+    "INSERT INTO users(id, email, name, created_at, password_hash) VALUES(?, ?, ?, ?, ?)",
+    [user.id, user.email, user.name, user.created_at, user.password_hash],
   );
   return user;
+}
+
+export async function setPassword(userId: string, passwordHash: string): Promise<void> {
+  const db = await getDriver();
+  await db.run("UPDATE users SET password_hash = ? WHERE id = ?", [passwordHash, userId]);
 }
 
 export async function listTopics(userId: string): Promise<TopicRow[]> {
@@ -167,15 +175,16 @@ export async function deleteTopic(topicId: string, userId: string): Promise<bool
   return true;
 }
 
-export async function findReportByDate(
+export async function findReportByPeriod(
   topicId: string,
   date: string,
+  rangeDays: number,
 ): Promise<ReportRow | undefined> {
   const db = await getDriver();
-  return db.get<ReportRow>("SELECT * FROM reports WHERE topic_id = ? AND date = ?", [
-    topicId,
-    date,
-  ]);
+  return db.get<ReportRow>(
+    "SELECT * FROM reports WHERE topic_id = ? AND date = ? AND range_days = ?",
+    [topicId, date, rangeDays],
+  );
 }
 
 export async function saveReport(input: {
@@ -183,8 +192,9 @@ export async function saveReport(input: {
   date: string;
   markdown: string;
   sourcesJson: string;
+  rangeDays: number;
 }): Promise<ReportRow> {
-  const existing = await findReportByDate(input.topicId, input.date);
+  const existing = await findReportByPeriod(input.topicId, input.date, input.rangeDays);
   const db = await getDriver();
   if (existing) {
     await db.run(
@@ -200,10 +210,19 @@ export async function saveReport(input: {
     markdown: input.markdown,
     sources_json: input.sourcesJson,
     created_at: nowIso(),
+    range_days: input.rangeDays,
   };
   await db.run(
-    "INSERT INTO reports(id, topic_id, date, markdown, sources_json, created_at) VALUES(?,?,?,?,?,?)",
-    [row.id, row.topic_id, row.date, row.markdown, row.sources_json, row.created_at],
+    "INSERT INTO reports(id, topic_id, date, markdown, sources_json, created_at, range_days) VALUES(?,?,?,?,?,?,?)",
+    [
+      row.id,
+      row.topic_id,
+      row.date,
+      row.markdown,
+      row.sources_json,
+      row.created_at,
+      row.range_days,
+    ],
   );
   return row;
 }
@@ -233,5 +252,29 @@ export async function getReportForUser(
      FROM reports r JOIN topics t ON t.id = r.topic_id
      WHERE r.id = ? AND t.user_id = ?`,
     [reportId, userId],
+  );
+}
+
+export interface FeedbackInput {
+  userId: string;
+  reportId: string;
+  kind: string;
+  target?: string;
+  value: string;
+}
+
+export async function insertFeedback(input: FeedbackInput): Promise<void> {
+  const db = await getDriver();
+  await db.run(
+    "INSERT INTO feedback(id, user_id, report_id, kind, target, value, created_at) VALUES(?,?,?,?,?,?,?)",
+    [
+      crypto.randomUUID(),
+      input.userId,
+      input.reportId,
+      input.kind,
+      input.target ?? null,
+      input.value,
+      nowIso(),
+    ],
   );
 }

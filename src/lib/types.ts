@@ -10,6 +10,7 @@ export interface Article {
   snippet?: string;
   content?: string;
   finalUrl?: string;
+  imageUrl?: string;
 }
 
 export interface Topic {
@@ -30,4 +31,5 @@ export interface ReportSource {
   publisher: string;
   publishedAt: string | null;
   lang: Lang;
+  imageUrl?: string | null;
 }
