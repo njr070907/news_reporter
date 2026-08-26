@@ -9,12 +9,36 @@ jobs:
   trigger:
     runs-on: ubuntu-latest
     steps:
-      - name: Trigger daily report generation
+      - name: Trigger report generation (async)
         run: |
-          code=$(curl -s -o /tmp/resp.txt -w "%{http_code}" \
+          code=$(curl -s -o /tmp/trig.txt -w "%{http_code}" \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             "https://news-reporter-web-production.up.railway.app/api/cron/generate")
-            echo "--- response ---"
-            cat /tmp/resp.txt
-            echo ""
-            if [ "$code" != "200" ]; then echo "FAILED with HTTP $code"; exit 1; fi
+          echo "trigger HTTP $code"
+          cat /tmp/trig.txt
+          [ "$code" = "202" ] || { echo "unexpected status"; exit 1; }
+
+      - name: Wait for completion
+        run: |
+          for i in $(seq 1 60); do
+            sleep 30
+            resp=$(curl -s -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+              "https://news-reporter-web-production.up.railway.app/api/cron/generate?status=1")
+            echo "[poll $i] $resp"
+            running=$(echo "$resp" | jq -r ".running // \"error\"")
+            if [ "$running" = "false" ]; then
+              failed=$(echo "$resp" | jq -r ".result.failed // 999")
+              if [ "$failed" != "0" ]; then
+                echo "generation finished with failures"
+                exit 1
+              fi
+              echo "all reports generated successfully"
+              exit 0
+            fi
+            if [ "$running" = "error" ]; then
+              echo "bad status response"
+              exit 1
+            fi
+          done
+          echo "timed out after 30 minutes"
+          exit 1
