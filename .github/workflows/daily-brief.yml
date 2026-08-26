@@ -1,0 +1,20 @@
+name: daily-brief
+
+on:
+  schedule:
+    - cron: "0 22 * * *"
+  workflow_dispatch: {}
+
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger daily report generation
+        run: |
+          code=$(curl -s -o /tmp/resp.txt -w "%{http_code}" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "https://news-reporter-web-production.up.railway.app/api/cron/generate")
+            echo "--- response ---"
+            cat /tmp/resp.txt
+            echo ""
+            if [ "$code" != "200" ]; then echo "FAILED with HTTP $code"; exit 1; fi
