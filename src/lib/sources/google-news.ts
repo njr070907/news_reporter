@@ -46,7 +46,7 @@ export async function fetchGoogleNews(
   const raw = doc.rss?.channel?.item;
   const items = raw ? (Array.isArray(raw) ? raw : [raw]) : [];
   const out: Article[] = [];
-  for (const item of items.slice(0, 12)) {
+  for (const item of items.slice(0, 30)) {
     if (!item.title || !item.link) continue;
     const sep = item.title.lastIndexOf(" - ");
     let title = item.title.trim();

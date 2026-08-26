@@ -4,7 +4,7 @@ import type { Article } from "./types";
 const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
 
-const MAX_CONTENT_CHARS = 2400;
+const MAX_CONTENT_CHARS = 3000;
 
 export interface EnrichStats {
   total: number;
@@ -192,7 +192,7 @@ async function mapPool<T>(
 
 export async function enrichArticles(
   articles: Article[],
-  concurrency = 6,
+  concurrency = 8,
 ): Promise<EnrichStats> {
   const googleLinked = articles.filter((a) => isGoogleLink(a.url));
 

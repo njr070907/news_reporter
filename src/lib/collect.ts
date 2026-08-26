@@ -2,6 +2,8 @@ import type { Article, CollectResult, Topic } from "./types";
 import { fetchGoogleNews } from "./sources/google-news";
 import { fetchBingNews } from "./sources/bing-news";
 
+export const MAX_ARTICLES = 40;
+
 function normalizeUrl(url: string): string {
   try {
     const u = new URL(url);
@@ -21,22 +23,20 @@ export async function collectArticles(
   topic: Topic,
   days = 1,
 ): Promise<CollectResult> {
-  const zhKw = topic.keywordsZh.join(" OR ");
-  const enKw = topic.keywordsEn.join(" OR ");
   const jobs: Array<{ label: string; run: () => Promise<Article[]> }> = [];
-  if (zhKw) {
+  for (const kw of topic.keywordsZh) {
     jobs.push({
-      label: `google-zh「${zhKw}」`,
-      run: () => fetchGoogleNews(zhKw, "zh", days),
+      label: `google-zh「${kw}」`,
+      run: () => fetchGoogleNews(kw, "zh", days),
     });
-    jobs.push({ label: `bing-zh「${zhKw}」`, run: () => fetchBingNews(zhKw, "zh") });
+    jobs.push({ label: `bing-zh「${kw}」`, run: () => fetchBingNews(kw, "zh") });
   }
-  if (enKw) {
+  for (const kw of topic.keywordsEn) {
     jobs.push({
-      label: `google-en "${enKw}"`,
-      run: () => fetchGoogleNews(enKw, "en", days),
+      label: `google-en "${kw}"`,
+      run: () => fetchGoogleNews(kw, "en", days),
     });
-    jobs.push({ label: `bing-en "${enKw}"`, run: () => fetchBingNews(enKw, "en") });
+    jobs.push({ label: `bing-en "${kw}"`, run: () => fetchBingNews(kw, "en") });
   }
 
   const settled = await Promise.allSettled(jobs.map((j) => j.run()));
@@ -63,6 +63,7 @@ export async function collectArticles(
   merged.sort(
     (a, b) => (b.publishedAt?.getTime() ?? 0) - (a.publishedAt?.getTime() ?? 0),
   );
+  if (merged.length > MAX_ARTICLES) merged.length = MAX_ARTICLES;
   merged.forEach((a, i) => {
     a.id = `S${i + 1}`;
   });

@@ -43,7 +43,7 @@ export async function fetchBingNews(query: string, lang: Lang): Promise<Article[
   const raw = doc.rss?.channel?.item;
   const items = raw ? (Array.isArray(raw) ? raw : [raw]) : [];
   const out: Article[] = [];
-  for (const item of items.slice(0, 12)) {
+  for (const item of items.slice(0, 30)) {
     if (!item.title || !item.link) continue;
     const s = item.source;
     const publisher =
