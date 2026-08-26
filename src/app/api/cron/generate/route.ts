@@ -35,6 +35,7 @@ export async function GET(req: Request): Promise<NextResponse> {
     return NextResponse.json({ error: "CRON_SECRET 未配置" }, { status: 500 });
   }
 
+  const force = new URL(req.url).searchParams.get("force") === "1";
   const date = todayLocal();
   const rows = await listActiveTopicsAll();
 
@@ -56,12 +57,14 @@ export async function GET(req: Request): Promise<NextResponse> {
     while (workloads.length > 0) {
       const items = workloads.shift();
       if (!items) break;
-      const existingReports = await Promise.all(
-        items.map((i) => findReportByPeriod(i.id, date, 1)),
-      );
-      if (existingReports.every((r) => r !== undefined)) {
-        cached++;
-        continue;
+      if (!force) {
+        const existingReports = await Promise.all(
+          items.map((i) => findReportByPeriod(i.id, date, 1)),
+        );
+        if (existingReports.every((r) => r !== undefined)) {
+          cached++;
+          continue;
+        }
       }
       const first = items[0];
       try {
