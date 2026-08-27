@@ -47,14 +47,32 @@ export async function chat(
 ): Promise<string> {
   const { provider, apiKey, baseUrl, model } = requireLlmConfig();
 
-  const systemMessage: ChatMessage = {
-    role: "system",
-    content: "你是一个中文助手，必须用中文回答所有问题。不要使用英文，不要使用思考模式。",
-  };
-
-  const finalMessages = provider === "local"
-    ? [systemMessage, ...messages]
-    : messages;
+  if (provider === "local") {
+    const prompt = messages.map((m) => `${m.role}: ${m.content}`).join("\n");
+    const res = await fetch(`${baseUrl.replace("/v1", "")}/api/generate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json; charset=utf-8" },
+      body: JSON.stringify({
+        model,
+        prompt,
+        stream: false,
+        options: {
+          num_ctx: 32768,
+          repeat_penalty: 1.1,
+          temperature: opts?.temperature ?? 0.3,
+        },
+      }),
+      signal: AbortSignal.timeout(600000),
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      throw new Error(`LLM 请求失败 HTTP ${res.status}: ${text.slice(0, 500)}`);
+    }
+    const data = (await res.json()) as { response?: string };
+    const content = data.response;
+    if (!content) throw new Error("LLM 返回内容为空");
+    return content.replace(/Thinking\.\.\.([\s\S]*?)(?=\n\n|$)/g, "").trim();
+  }
 
   const res = await fetch(`${baseUrl}/chat/completions`, {
     method: "POST",
@@ -64,15 +82,8 @@ export async function chat(
     },
     body: JSON.stringify({
       model,
-      messages: finalMessages,
+      messages,
       temperature: opts?.temperature ?? 0.3,
-      ...(provider === "local" && {
-        options: {
-          num_ctx: 32768,
-          repeat_penalty: 1.1,
-        },
-        think: false,
-      }),
     }),
     signal: AbortSignal.timeout(600000),
   });
