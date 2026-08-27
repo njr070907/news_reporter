@@ -54,7 +54,7 @@ export default async function ReportsPage() {
                       </p>
                       <p className="mt-0.5 text-xs text-neutral-400">
                         {sources.length} 条信源 ·{" "}
-                        {new Date(r.created_at).toLocaleTimeString("zh-CN", {
+                        {new Date(new Date(r.created_at).getTime() + 8 * 3600000).toLocaleTimeString("zh-CN", {
                           hour: "2-digit",
                           minute: "2-digit",
                         })}{" "}
