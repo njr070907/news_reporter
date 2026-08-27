@@ -3,20 +3,38 @@ export interface ChatMessage {
   content: string;
 }
 
+type LlmProvider = "local" | "remote";
+
 interface LlmConfig {
+  provider: LlmProvider;
   apiKey: string;
   baseUrl: string;
   model: string;
 }
 
+function getProvider(): LlmProvider {
+  const provider = process.env.LLM_PROVIDER;
+  if (provider === "local" || provider === "remote") return provider;
+  return "remote";
+}
+
 export function requireLlmConfig(): LlmConfig {
+  const provider = getProvider();
+
+  if (provider === "local") {
+    const baseUrl = (process.env.LOCAL_LLM_BASE_URL ?? "http://localhost:11434/v1").replace(/\/+$/, "");
+    const model = process.env.LOCAL_LLM_MODEL ?? "qwen3.5:4b";
+    return { provider: "local", apiKey: "ollama", baseUrl, model };
+  }
+
   const apiKey = process.env.LLM_API_KEY;
   if (!apiKey) {
     throw new Error(
-      "缺少 LLM_API_KEY：请打开项目根目录的 .env.local，填入你的 DeepSeek API Key 后重试（该文件已被 .gitignore 忽略，不会提交到仓库）。",
+      "缺少 LLM_API_KEY：请打开项目根目录的 .env.local，填入你的 DeepSeek API Key 后重试。",
     );
   }
   return {
+    provider: "remote",
     apiKey,
     baseUrl: (process.env.LLM_BASE_URL ?? "https://api.deepseek.com").replace(/\/+$/, ""),
     model: process.env.LLM_MODEL ?? "deepseek-v4-flash-vision-exp",
@@ -27,7 +45,17 @@ export async function chat(
   messages: ChatMessage[],
   opts?: { temperature?: number },
 ): Promise<string> {
-  const { apiKey, baseUrl, model } = requireLlmConfig();
+  const { provider, apiKey, baseUrl, model } = requireLlmConfig();
+
+  const systemMessage: ChatMessage = {
+    role: "system",
+    content: "你是一个中文助手，必须用中文回答所有问题。不要使用英文，不要使用思考模式。",
+  };
+
+  const finalMessages = provider === "local"
+    ? [systemMessage, ...messages]
+    : messages;
+
   const res = await fetch(`${baseUrl}/chat/completions`, {
     method: "POST",
     headers: {
@@ -36,10 +64,17 @@ export async function chat(
     },
     body: JSON.stringify({
       model,
-      messages,
+      messages: finalMessages,
       temperature: opts?.temperature ?? 0.3,
+      ...(provider === "local" && {
+        options: {
+          num_ctx: 32768,
+          repeat_penalty: 1.1,
+        },
+        think: false,
+      }),
     }),
-    signal: AbortSignal.timeout(300000),
+    signal: AbortSignal.timeout(600000),
   });
   if (!res.ok) {
     const text = await res.text().catch(() => "");
