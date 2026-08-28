@@ -57,17 +57,18 @@ export default function ReportView({ reportId, sources, sections }: Props) {
   }
 
   return (
-    <div className="mt-4 pb-12">
-      <div className="mb-6 flex items-center gap-3 rounded-xl border border-dashed border-black/15 px-4 py-2.5 text-sm dark:border-white/15">
-        <span className="text-neutral-500">这份简报对你有用吗？</span>
+    <div className="pb-16">
+      {/* Daily rating */}
+      <div className="mb-10 rounded-[var(--radius-lg)] border border-border bg-[var(--surface-solid)] p-5">
+        <p className="text-[14px] text-text-secondary">Was this briefing useful?</p>
         {dailyRating !== null ? (
-          <span className="text-neutral-400">已收到反馈，感谢 🙏</span>
+          <p className="mt-2 text-[13px] text-text-tertiary">Thanks for your feedback.</p>
         ) : (
-          <div className="flex gap-2">
+          <div className="mt-3 flex gap-2">
             {[
-              { v: "2", label: "👍 有用" },
-              { v: "1", label: "🙂 一般" },
-              { v: "0", label: "👎 没用" },
+              { v: "2", label: "Useful", icon: "👍" },
+              { v: "1", label: "Okay", icon: "🙂" },
+              { v: "0", label: "Not useful", icon: "👎" },
             ].map((o) => (
               <button
                 key={o.v}
@@ -75,8 +76,9 @@ export default function ReportView({ reportId, sources, sections }: Props) {
                   setDailyRating(Number(o.v));
                   void sendFeedback(reportId, "daily_rating", o.v);
                 }}
-                className="rounded-full border border-black/10 px-2.5 py-0.5 text-xs transition-colors hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/10"
+                className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-[13px] font-medium text-text-secondary transition-all duration-200 hover:border-border-hover hover:bg-black/[0.02] hover:text-text-primary dark:hover:bg-white/[0.03]"
               >
+                <span>{o.icon}</span>
                 {o.label}
               </button>
             ))}
@@ -84,10 +86,8 @@ export default function ReportView({ reportId, sources, sections }: Props) {
         )}
       </div>
 
-      <div
-        className="report-body"
-        onClick={trackSourceClick}
-      >
+      {/* Report body */}
+      <div className="report-body" onClick={trackSourceClick}>
         {sections.map((sec, idx) => {
           const showThumb = !NO_THUMB_TITLES.has(sec.title);
           const imageSrc = showThumb
@@ -95,15 +95,20 @@ export default function ReportView({ reportId, sources, sections }: Props) {
                 .map((sid) => bySid[sid])
                 .find((s) => s?.imageUrl)?.imageUrl
             : undefined;
+
           return (
-            <section key={idx}>
+            <section
+              key={idx}
+              className="stagger-in"
+              style={{ animationDelay: `${idx * 50}ms` }}
+            >
               {sec.title && (
-                <div className="group flex items-start justify-between gap-3">
+                <div className="group flex items-start justify-between gap-4">
                   <h2>{sec.title}</h2>
                   {showThumb && (
-                    <span className="mt-1 flex shrink-0 gap-1 opacity-40 transition-opacity group-hover:opacity-100">
+                    <span className="mt-1.5 flex shrink-0 gap-0.5 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
                       <button
-                        aria-label="这节有帮助"
+                        aria-label="Helpful section"
                         onClick={() => {
                           setRated((r) => ({ ...r, [`u${idx}`]: true }));
                           void sendFeedback(
@@ -112,16 +117,19 @@ export default function ReportView({ reportId, sources, sections }: Props) {
                             sec.title,
                           );
                         }}
-                        className={`rounded px-1 text-sm ${
+                        className={`rounded-md p-1.5 transition-colors ${
                           rated[`u${idx}`]
-                            ? "bg-emerald-100 dark:bg-emerald-900/40"
-                            : "hover:bg-black/5 dark:hover:bg-white/10"
+                            ? "bg-[var(--success)]/10 text-[var(--success)]"
+                            : "text-text-tertiary hover:bg-black/[0.03] hover:text-text-primary dark:hover:bg-white/[0.05]"
                         }`}
                       >
-                        👍
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill={rated[`u${idx}`] ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M7 10v12" />
+                          <path d="M15 5.88L14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2h0a3.13 3.13 0 0 1 3 3.88Z" />
+                        </svg>
                       </button>
                       <button
-                        aria-label="这节有问题"
+                        aria-label="Unhelpful section"
                         onClick={() => {
                           setRated((r) => ({ ...r, [`d${idx}`]: true }));
                           void sendFeedback(
@@ -130,13 +138,16 @@ export default function ReportView({ reportId, sources, sections }: Props) {
                             sec.title,
                           );
                         }}
-                        className={`rounded px-1 text-sm ${
+                        className={`rounded-md p-1.5 transition-colors ${
                           rated[`d${idx}`]
-                            ? "bg-red-100 dark:bg-red-900/40"
-                            : "hover:bg-black/5 dark:hover:bg-white/10"
+                            ? "bg-[var(--danger)]/10 text-[var(--danger)]"
+                            : "text-text-tertiary hover:bg-black/[0.03] hover:text-text-primary dark:hover:bg-white/[0.05]"
                         }`}
                       >
-                        👎
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill={rated[`d${idx}`] ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M17 14V2" />
+                          <path d="M9 18.12L10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8A2 2 0 0 1 6.5 2H20a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2.76a2 2 0 0 0-1.79 1.11L12 22h0a3.13 3.13 0 0 1-3-3.88Z" />
+                        </svg>
                       </button>
                     </span>
                   )}
@@ -144,7 +155,7 @@ export default function ReportView({ reportId, sources, sections }: Props) {
               )}
               {imageSrc && (
                 /* eslint-disable-next-line @next/next/no-img-element */
-                <img src={imageSrc} alt={`${sec.title} 配图`} loading="lazy" />
+                <img src={imageSrc} alt={`${sec.title} illustration`} loading="lazy" />
               )}
               <ReactMarkdown remarkPlugins={[remarkGfm]}>
                 {sec.body}
@@ -153,6 +164,39 @@ export default function ReportView({ reportId, sources, sections }: Props) {
           );
         })}
       </div>
+
+      {/* Source list */}
+      {sources.length > 0 && (
+        <div className="mt-12 border-t border-border pt-8">
+          <h3 className="text-[14px] font-semibold tracking-tight text-text-primary">
+            Sources ({sources.length})
+          </h3>
+          <div className="mt-4 space-y-2">
+            {sources.map((s) => (
+              <a
+                key={s.sid}
+                href={s.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="group flex items-center justify-between rounded-[var(--radius-md)] border border-border px-4 py-3 transition-all duration-200 hover:border-border-hover hover:shadow-[var(--shadow-sm)]"
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[14px] font-medium text-text-primary transition-colors group-hover:text-[var(--accent)]">
+                    {s.title}
+                  </p>
+                  <p className="mt-0.5 truncate text-[12px] text-text-tertiary">
+                    {s.publisher} {s.publishedAt ? `· ${s.publishedAt}` : ""}
+                  </p>
+                </div>
+                <svg className="ml-4 shrink-0 text-text-tertiary transition-all duration-200 group-hover:translate-x-0.5 group-hover:text-[var(--accent)]" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M7 17L17 7" />
+                  <path d="M7 7h10v10" />
+                </svg>
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
