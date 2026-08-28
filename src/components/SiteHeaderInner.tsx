@@ -3,10 +3,11 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import LogoutButton from "./LogoutButton";
+import AccountPopover from "./AccountPopover";
 
 interface NavUser {
   email: string;
+  name?: string;
 }
 
 export default function SiteHeaderInner({ user }: { user: NavUser | null }) {
@@ -23,6 +24,7 @@ export default function SiteHeaderInner({ user }: { user: NavUser | null }) {
 
   const navItems = user
     ? [
+        { href: "/", label: "Today" },
         { href: "/reports", label: "Reports" },
         { href: "/topics", label: "Topics" },
       ]
@@ -38,7 +40,7 @@ export default function SiteHeaderInner({ user }: { user: NavUser | null }) {
     >
       <div className="mx-auto flex h-14 max-w-6xl items-center px-6">
         <Link
-          href={user ? "/reports" : "/login"}
+          href={user ? "/" : "/login"}
           className="text-[15px] font-semibold tracking-tight text-text-primary transition-opacity hover:opacity-70"
         >
           News Reporter
@@ -51,7 +53,7 @@ export default function SiteHeaderInner({ user }: { user: NavUser | null }) {
                 key={item.href}
                 href={item.href}
                 className={`rounded-full px-4 py-1.5 text-[13px] font-medium transition-all duration-200 ${
-                  pathname === item.href || pathname.startsWith(item.href + "/")
+                  pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href))
                     ? "bg-[var(--accent-soft)] text-[var(--accent)]"
                     : "text-text-secondary hover:text-text-primary hover:bg-black/[0.03] dark:hover:bg-white/[0.05]"
                 }`}
@@ -64,12 +66,7 @@ export default function SiteHeaderInner({ user }: { user: NavUser | null }) {
 
         <div className="ml-auto flex items-center gap-3">
           {user ? (
-            <>
-              <span className="hidden text-[13px] text-text-tertiary sm:inline">
-                {user.email}
-              </span>
-              <LogoutButton />
-            </>
+            <AccountPopover user={user} />
           ) : (
             <Link
               href="/login"

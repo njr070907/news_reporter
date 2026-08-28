@@ -10,7 +10,6 @@ export default async function Home() {
       <div className="page-enter">
         {/* Hero section for logged-out users */}
         <section className="relative overflow-hidden px-6 py-24 md:py-32">
-          {/* Ambient light */}
           <div className="pointer-events-none absolute right-0 top-0 h-[600px] w-[600px] translate-x-1/3 -translate-y-1/4 rounded-full bg-[var(--accent-glow)] opacity-10 blur-[120px]" />
           <div className="pointer-events-none absolute bottom-0 left-0 h-[400px] w-[400px] -translate-x-1/4 translate-y-1/4 rounded-full bg-[var(--accent-glow)] opacity-8 blur-[100px]" />
 
@@ -28,7 +27,7 @@ export default async function Home() {
               Every claim verifiable. Every source cited.
             </p>
             <div className="mt-10 flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
-              <Link href="/login" className="btn-capsule btn-primary px-8 py-3 text-[15px]">
+              <Link href="/login" className="btn-capsule btn-primary px-8 py-3 text-[15px] pointer-glow">
                 Get Started
               </Link>
               <Link href="/login" className="btn-capsule btn-secondary px-8 py-3 text-[15px]">
@@ -117,7 +116,7 @@ export default async function Home() {
       <section className="px-6 pb-12 pt-4">
         <div className="mx-auto max-w-4xl">
           <div className="flex flex-wrap gap-3">
-            <Link href="/topics" className="btn-capsule btn-primary">
+            <Link href="/topics" className="btn-capsule btn-primary pointer-glow">
               Generate Today&apos;s Brief
             </Link>
             <Link href="/reports" className="btn-capsule btn-secondary">
@@ -156,16 +155,19 @@ export default async function Home() {
                   </div>
                 </Link>
               ) : (
+                /* Skeleton preview when no reports */
                 <div className="mt-4">
-                  <p className="text-[14px] text-text-secondary">
-                    No briefings yet. Set up a topic to get started.
+                  <div className="space-y-3">
+                    <div className="skeleton h-5 w-3/4 rounded" />
+                    <div className="skeleton h-4 w-1/2 rounded" />
+                    <div className="mt-4 flex gap-2">
+                      <div className="skeleton h-8 w-24 rounded-full" />
+                      <div className="skeleton h-8 w-20 rounded-full" />
+                    </div>
+                  </div>
+                  <p className="mt-4 text-[13px] text-text-tertiary">
+                    Set up topics to generate your first briefing.
                   </p>
-                  <Link href="/topics" className="mt-3 inline-flex items-center gap-2 text-[13px] font-medium text-[var(--accent)]">
-                    Set up topics
-                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M6 4l4 4-4 4" />
-                    </svg>
-                  </Link>
                 </div>
               )}
             </div>

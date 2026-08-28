@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { PRESET_TOPICS } from "@/lib/presets";
 import type { TopicItem } from "./page";
+import { useToast } from "@/components/ToastProvider";
 
 interface Props {
   initialTopics: TopicItem[];
@@ -21,14 +22,17 @@ function Keywords({ zh, en }: { zh: string[]; en: string[] }) {
 
 export default function TopicsClient({ initialTopics }: Props) {
   const router = useRouter();
+  const { toast } = useToast();
   const [topics, setTopics] = useState<TopicItem[]>(initialTopics);
   const [newKeywords, setNewKeywords] = useState("");
   const [newName, setNewName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [generating, setGenerating] = useState<string | null>(null);
+  const [composerOpen, setComposerOpen] = useState(false);
 
   const presetNames = useMemo(() => new Set(topics.map((t) => t.name)), [topics]);
   const availablePresets = PRESET_TOPICS.filter((p) => !presetNames.has(p.name));
+  const activeTopics = topics.filter((t) => t.active);
 
   async function toggleActive(topic: TopicItem) {
     setTopics((ts) =>
@@ -43,6 +47,8 @@ export default function TopicsClient({ initialTopics }: Props) {
       setTopics((ts) =>
         ts.map((t) => (t.id === topic.id ? { ...t, active: topic.active } : t)),
       );
+    } else {
+      toast(!topic.active ? "Topic activated" : "Topic deactivated");
     }
   }
 
@@ -54,6 +60,7 @@ export default function TopicsClient({ initialTopics }: Props) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id: topic.id }),
     });
+    toast("Topic deleted");
   }
 
   async function addPreset(presetName: string) {
@@ -92,6 +99,7 @@ export default function TopicsClient({ initialTopics }: Props) {
         active: data.topic!.active === 1,
       },
     ]);
+    toast(`Added "${preset.name}"`);
   }
 
   async function addCustom(e: React.FormEvent) {
@@ -118,6 +126,7 @@ export default function TopicsClient({ initialTopics }: Props) {
     setError(null);
     setNewKeywords("");
     setNewName("");
+    setComposerOpen(false);
     setTopics((ts) => [
       ...ts,
       {
@@ -128,6 +137,7 @@ export default function TopicsClient({ initialTopics }: Props) {
         active: data.topic!.active === 1,
       },
     ]);
+    toast(`Created "${data.topic!.name}"`);
   }
 
   async function generate(topicId: string, days: number) {
@@ -153,25 +163,44 @@ export default function TopicsClient({ initialTopics }: Props) {
   }
 
   return (
-    <div className="space-y-12">
+    <div className="space-y-10">
       {/* Page header */}
       <div>
         <h1 className="text-[28px] font-semibold tracking-tight text-text-primary md:text-[32px]">
-          My Topics
+          My Interests
         </h1>
         <p className="mt-2 text-[15px] text-text-secondary">
-          Toggle topics on to receive daily briefings.
+          {topics.length} topics shaping your briefing.
         </p>
       </div>
 
-      {/* Active topics */}
+      {/* Interest cloud */}
+      {activeTopics.length > 0 && (
+        <section>
+          <h2 className="mb-3 text-[13px] font-medium uppercase tracking-wider text-text-tertiary">
+            Active Interests
+          </h2>
+          <div className="flex flex-wrap gap-2">
+            {activeTopics.map((t) => (
+              <span
+                key={t.id}
+                className="inline-flex items-center rounded-full bg-[var(--accent-soft)] px-3.5 py-1.5 text-[13px] font-medium text-[var(--accent)]"
+              >
+                {t.name}
+              </span>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Topic list */}
       <section>
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-[13px] font-medium uppercase tracking-wider text-text-tertiary">
-            Your Topics
+            All Topics
           </h2>
           <span className="text-[13px] text-text-tertiary">
-            {topics.filter((t) => t.active).length} active
+            {activeTopics.length} active
           </span>
         </div>
 
@@ -188,11 +217,10 @@ export default function TopicsClient({ initialTopics }: Props) {
                 key={t.id}
                 className={`group flex items-center gap-4 rounded-[var(--radius-lg)] border px-5 py-4 transition-all duration-280 ${
                   t.active
-                    ? "border-[var(--success)]/20 bg-[var(--success)]/[0.03]"
+                    ? "border-[var(--accent-border)] bg-[var(--accent-soft)]/30"
                     : "border-border bg-[var(--surface-solid)] hover:border-border-hover"
                 }`}
               >
-                {/* Toggle */}
                 <button
                   role="switch"
                   aria-checked={t.active}
@@ -201,27 +229,25 @@ export default function TopicsClient({ initialTopics }: Props) {
                   data-state={t.active ? "on" : "off"}
                 />
 
-                {/* Info */}
                 <div className="min-w-0 flex-1">
                   <p className="text-[15px] font-medium text-text-primary">{t.name}</p>
                   <Keywords zh={t.keywordsZh} en={t.keywordsEn} />
                 </div>
 
-                {/* Actions */}
                 <div className="flex shrink-0 items-center gap-2">
                   <button
                     onClick={() => generate(t.id, 1)}
                     disabled={generating !== null}
                     className="btn-capsule btn-secondary px-3 py-1.5 text-[12px] disabled:opacity-40"
                   >
-                    {generating === `${t.id}-1` ? "Generating..." : "Daily"}
+                    {generating === `${t.id}-1` ? "..." : "Daily"}
                   </button>
                   <button
                     onClick={() => generate(t.id, 7)}
                     disabled={generating !== null}
                     className="btn-capsule btn-secondary px-3 py-1.5 text-[12px] disabled:opacity-40"
                   >
-                    {generating === `${t.id}-7` ? "Generating..." : "Weekly"}
+                    {generating === `${t.id}-7` ? "..." : "Weekly"}
                   </button>
                   <button
                     onClick={() => remove(t)}
@@ -253,7 +279,7 @@ export default function TopicsClient({ initialTopics }: Props) {
       {/* Preset suggestions */}
       {availablePresets.length > 0 && (
         <section>
-          <h2 className="mb-4 text-[13px] font-medium uppercase tracking-wider text-text-tertiary">
+          <h2 className="mb-3 text-[13px] font-medium uppercase tracking-wider text-text-tertiary">
             Suggested Topics
           </h2>
           <div className="flex flex-wrap gap-2">
@@ -271,32 +297,66 @@ export default function TopicsClient({ initialTopics }: Props) {
         </section>
       )}
 
-      {/* Custom topic form */}
-      <section className="rounded-[var(--radius-xl)] border border-border bg-[var(--surface-solid)] p-6">
-        <h2 className="text-[15px] font-semibold text-text-primary">Custom Topic</h2>
-        <form onSubmit={addCustom} className="mt-4 space-y-4">
-          <input
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-            placeholder="Topic name (optional, e.g. Electric Vehicles)"
-            className="input-apple"
-          />
-          <input
-            value={newKeywords}
-            onChange={(e) => setNewKeywords(e.target.value)}
-            required
-            placeholder="Keywords, comma-separated (Chinese keywords use Chinese sources, English use English sources)"
-            className="input-apple"
-          />
-          {error && <p className="text-[13px] text-[var(--danger)]">{error}</p>}
+      {/* Custom topic composer */}
+      <section>
+        {!composerOpen ? (
           <button
-            type="submit"
-            className="btn-capsule btn-primary disabled:opacity-40"
-            disabled={!newKeywords}
+            onClick={() => setComposerOpen(true)}
+            className="card-surface w-full px-5 py-4 text-left transition-all hover:shadow-[var(--shadow-md)]"
           >
-            Add Topic
+            <div className="flex items-center gap-3">
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--accent-soft)] text-[var(--accent)]">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="12" y1="5" x2="12" y2="19" />
+                  <line x1="5" y1="12" x2="19" y2="12" />
+                </svg>
+              </div>
+              <div>
+                <p className="text-[14px] font-medium text-text-primary">Create a custom topic</p>
+                <p className="text-[12px] text-text-tertiary">Define your own keywords for targeted briefings</p>
+              </div>
+            </div>
           </button>
-        </form>
+        ) : (
+          <div className="card-surface p-5">
+            <div className="flex items-center justify-between">
+              <h3 className="text-[14px] font-medium text-text-primary">Custom Topic</h3>
+              <button
+                onClick={() => { setComposerOpen(false); setError(null); }}
+                className="rounded-md p-1 text-text-tertiary hover:text-text-primary"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </div>
+            <form onSubmit={addCustom} className="mt-4 space-y-3">
+              <input
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                placeholder="Topic name (optional)"
+                className="input-apple"
+              />
+              <input
+                value={newKeywords}
+                onChange={(e) => setNewKeywords(e.target.value)}
+                required
+                placeholder="Keywords, comma-separated"
+                className="input-apple"
+                autoFocus
+              />
+              {error && <p className="text-[13px] text-[var(--danger)]">{error}</p>}
+              <button
+                type="submit"
+                className="btn-capsule btn-primary text-[13px] disabled:opacity-40"
+                disabled={!newKeywords}
+              >
+                Add Topic
+              </button>
+            </form>
+          </div>
+        )}
       </section>
     </div>
   );
