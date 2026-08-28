@@ -1,4 +1,4 @@
-const testLocalLLM = async () => {
+﻿const testLocalLLM = async () => {
   const response = await fetch("http://localhost:11434/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -25,3 +25,4 @@ const testLocalLLM = async () => {
 };
 
 testLocalLLM().catch(console.error);
+

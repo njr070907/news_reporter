@@ -23,24 +23,22 @@ export default function LoginForm() {
       });
       const data = (await res.json()) as { error?: string };
       if (!res.ok) {
-        setError(data.error ?? "操作失败");
+        setError(data.error ?? "Operation failed");
         return;
       }
       router.replace("/topics");
       router.refresh();
     } catch {
-      setError("网络错误，请重试");
+      setError("Network error, please try again");
     } finally {
       setLoading(false);
     }
   }
 
-  const inputClass =
-    "w-full rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm outline-none focus:border-neutral-900 dark:border-white/20 dark:focus:border-neutral-100";
-
   return (
-    <div className="mt-6">
-      <div className="flex rounded-lg border border-black/10 p-1 text-sm dark:border-white/15">
+    <div>
+      {/* Mode toggle */}
+      <div className="flex rounded-[var(--radius-md)] bg-black/[0.03] p-1 dark:bg-white/[0.05]">
         {(["login", "register"] as const).map((m) => (
           <button
             key={m}
@@ -49,48 +47,56 @@ export default function LoginForm() {
               setMode(m);
               setError(null);
             }}
-            className={`flex-1 rounded-md py-1.5 transition-colors ${
+            className={`flex-1 rounded-[var(--radius-sm)] py-2 text-[13px] font-medium transition-all duration-200 ${
               mode === m
-                ? "bg-neutral-900 font-medium text-white dark:bg-neutral-100 dark:text-neutral-900"
-                : "text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-100"
+                ? "bg-[var(--surface-solid)] text-text-primary shadow-[var(--shadow-sm)]"
+                : "text-text-secondary hover:text-text-primary"
             }`}
           >
-            {m === "login" ? "登录" : "注册"}
+            {m === "login" ? "Sign In" : "Create Account"}
           </button>
         ))}
       </div>
 
-      <form onSubmit={submit} className="mt-4 space-y-3">
-        <input
-          type="email"
-          required
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder="邮箱"
-          className={inputClass}
-        />
-        <input
-          type="password"
-          required
-          minLength={6}
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          placeholder="密码（至少 6 位）"
-          className={inputClass}
-        />
-        {error && <p className="text-sm text-red-500">{error}</p>}
+      <form onSubmit={submit} className="mt-6 space-y-4">
+        <div>
+          <input
+            type="email"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="Email address"
+            className="input-apple"
+          />
+        </div>
+        <div>
+          <input
+            type="password"
+            required
+            minLength={6}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Password (min 6 characters)"
+            className="input-apple"
+          />
+        </div>
+
+        {error && (
+          <p className="text-[13px] text-[var(--danger)]">{error}</p>
+        )}
+
         <button
           type="submit"
           disabled={loading || !email || !password}
-          className="w-full rounded-lg bg-neutral-900 py-2 text-sm font-medium text-white transition-opacity disabled:opacity-40 dark:bg-neutral-100 dark:text-neutral-900"
+          className="btn-capsule btn-primary w-full disabled:opacity-40"
         >
-          {loading ? "处理中…" : mode === "login" ? "登录" : "创建账号"}
+          {loading ? "Processing..." : mode === "login" ? "Continue" : "Create Account"}
         </button>
       </form>
 
       {mode === "register" && (
-        <p className="mt-4 text-xs leading-relaxed text-neutral-400">
-          老用户（此前邮箱直登）：用原邮箱走「注册」设置一次密码，即可接管原有账号和简报历史。
+        <p className="mt-6 text-center text-[12px] leading-relaxed text-text-tertiary">
+          Existing users: use &ldquo;Create Account&rdquo; with your email to set a password and access your briefing history.
         </p>
       )}
     </div>
