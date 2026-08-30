@@ -11,9 +11,9 @@ export default function LogoutButton() {
         router.replace("/login");
         router.refresh();
       }}
-      className="text-sm text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100"
+      className="rounded-full px-3 py-1.5 text-[13px] text-text-tertiary transition-colors hover:text-text-primary hover:bg-black/[0.03] dark:hover:bg-white/[0.05]"
     >
-      登出
+      Sign Out
     </button>
   );
 }

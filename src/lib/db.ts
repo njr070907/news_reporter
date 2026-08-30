@@ -278,3 +278,12 @@ export async function insertFeedback(input: FeedbackInput): Promise<void> {
     ],
   );
 }
+
+export async function countByKind(userId: string, kind: string): Promise<number> {
+  const db = await getDriver();
+  const r = await db.get<{ count: number }>(
+    `SELECT COUNT(*) as count FROM feedback WHERE user_id = ? AND kind = ?`,
+    [userId, kind],
+  );
+  return r?.count ?? 0;
+}

@@ -1,4 +1,4 @@
-export interface ChatMessage {
+﻿export interface ChatMessage {
   role: "system" | "user" | "assistant";
   content: string;
 }
@@ -98,3 +98,4 @@ export async function chat(
   if (!content) throw new Error("LLM 返回内容为空");
   return content;
 }
+

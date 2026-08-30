@@ -21,5 +21,9 @@ export default async function TopicsPage() {
     keywordsEn: JSON.parse(t.keywords_en) as string[],
     active: t.active === 1,
   }));
-  return <TopicsClient initialTopics={topics} />;
+  return (
+    <div className="page-enter mx-auto max-w-4xl px-6 py-12 md:py-16">
+      <TopicsClient initialTopics={topics} />
+    </div>
+  );
 }

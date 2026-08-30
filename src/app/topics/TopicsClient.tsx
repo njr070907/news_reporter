@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { PRESET_TOPICS } from "@/lib/presets";
 import type { TopicItem } from "./page";
+import { useToast } from "@/components/ToastProvider";
 
 interface Props {
   initialTopics: TopicItem[];
@@ -13,22 +14,25 @@ function Keywords({ zh, en }: { zh: string[]; en: string[] }) {
   const all = [...zh, ...en];
   if (all.length === 0) return null;
   return (
-    <p className="mt-1 text-xs text-neutral-400">
-      关键词：{all.join("、")}
+    <p className="mt-1 text-[12px] text-text-tertiary">
+      {all.join(" · ")}
     </p>
   );
 }
 
 export default function TopicsClient({ initialTopics }: Props) {
   const router = useRouter();
+  const { toast } = useToast();
   const [topics, setTopics] = useState<TopicItem[]>(initialTopics);
   const [newKeywords, setNewKeywords] = useState("");
   const [newName, setNewName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [generating, setGenerating] = useState<string | null>(null);
+  const [composerOpen, setComposerOpen] = useState(false);
 
   const presetNames = useMemo(() => new Set(topics.map((t) => t.name)), [topics]);
   const availablePresets = PRESET_TOPICS.filter((p) => !presetNames.has(p.name));
+  const activeTopics = topics.filter((t) => t.active);
 
   async function toggleActive(topic: TopicItem) {
     setTopics((ts) =>
@@ -43,17 +47,20 @@ export default function TopicsClient({ initialTopics }: Props) {
       setTopics((ts) =>
         ts.map((t) => (t.id === topic.id ? { ...t, active: topic.active } : t)),
       );
+    } else {
+      toast(!topic.active ? "Topic activated" : "Topic deactivated");
     }
   }
 
   async function remove(topic: TopicItem) {
-    if (!confirm(`删除主题「${topic.name}」？其历史简报将一并删除。`)) return;
+    if (!confirm(`Delete topic "${topic.name}"? Its briefing history will also be removed.`)) return;
     setTopics((ts) => ts.filter((t) => t.id !== topic.id));
     await fetch("/api/topics", {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id: topic.id }),
     });
+    toast("Topic deleted");
   }
 
   async function addPreset(presetName: string) {
@@ -78,7 +85,7 @@ export default function TopicsClient({ initialTopics }: Props) {
       error?: string;
     };
     if (!res.ok || !data.topic) {
-      setError(data.error ?? "添加失败");
+      setError(data.error ?? "Failed to add topic");
       return;
     }
     setError(null);
@@ -92,6 +99,7 @@ export default function TopicsClient({ initialTopics }: Props) {
         active: data.topic!.active === 1,
       },
     ]);
+    toast(`Added "${preset.name}"`);
   }
 
   async function addCustom(e: React.FormEvent) {
@@ -112,12 +120,13 @@ export default function TopicsClient({ initialTopics }: Props) {
       error?: string;
     };
     if (!res.ok || !data.topic) {
-      setError(data.error ?? "添加失败");
+      setError(data.error ?? "Failed to add topic");
       return;
     }
     setError(null);
     setNewKeywords("");
     setNewName("");
+    setComposerOpen(false);
     setTopics((ts) => [
       ...ts,
       {
@@ -128,6 +137,7 @@ export default function TopicsClient({ initialTopics }: Props) {
         active: data.topic!.active === 1,
       },
     ]);
+    toast(`Created "${data.topic!.name}"`);
   }
 
   async function generate(topicId: string, days: number) {
@@ -141,12 +151,12 @@ export default function TopicsClient({ initialTopics }: Props) {
       });
       const data = (await res.json()) as { reportId?: string; error?: string };
       if (!res.ok || !data.reportId) {
-        setError(data.error ?? "生成失败");
+        setError(data.error ?? "Generation failed");
         return;
       }
       router.push(`/reports/${data.reportId}`);
     } catch {
-      setError("网络错误，请重试");
+      setError("Network error, please try again");
     } finally {
       setGenerating(null);
     }
@@ -154,116 +164,199 @@ export default function TopicsClient({ initialTopics }: Props) {
 
   return (
     <div className="space-y-10">
+      {/* Page header */}
+      <div>
+        <h1 className="text-[28px] font-semibold tracking-tight text-text-primary md:text-[32px]">
+          My Interests
+        </h1>
+        <p className="mt-2 text-[15px] text-text-secondary">
+          {topics.length} topics shaping your briefing.
+        </p>
+      </div>
+
+      {/* Interest cloud */}
+      {activeTopics.length > 0 && (
+        <section>
+          <h2 className="mb-3 text-[13px] font-medium uppercase tracking-wider text-text-tertiary">
+            Active Interests
+          </h2>
+          <div className="flex flex-wrap gap-2">
+            {activeTopics.map((t) => (
+              <span
+                key={t.id}
+                className="inline-flex items-center rounded-full bg-[var(--accent-soft)] px-3.5 py-1.5 text-[13px] font-medium text-[var(--accent)]"
+              >
+                {t.name}
+              </span>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Topic list */}
       <section>
-        <div className="flex items-baseline justify-between">
-          <h1 className="text-xl font-semibold tracking-tight">我的主题</h1>
-          <span className="text-xs text-neutral-400">
-            开启后才会每日生成简报
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-[13px] font-medium uppercase tracking-wider text-text-tertiary">
+            All Topics
+          </h2>
+          <span className="text-[13px] text-text-tertiary">
+            {activeTopics.length} active
           </span>
         </div>
 
-        <ul className="mt-4 divide-y divide-black/5 dark:divide-white/10 rounded-xl border border-black/10 dark:border-white/10">
-          {topics.map((t) => (
-            <li key={t.id} className="flex items-center gap-3 px-4 py-3">
-              <button
-                role="switch"
-                aria-checked={t.active}
-                onClick={() => toggleActive(t)}
-                className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${
-                  t.active ? "bg-emerald-600" : "bg-neutral-300 dark:bg-neutral-700"
+        {topics.length === 0 ? (
+          <div className="rounded-[var(--radius-lg)] border border-dashed border-border py-12 text-center">
+            <p className="text-[14px] text-text-secondary">
+              No topics yet. Choose from suggestions below or create a custom one.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {topics.map((t) => (
+              <div
+                key={t.id}
+                className={`group flex items-center gap-4 rounded-[var(--radius-lg)] border px-5 py-4 transition-all duration-280 ${
+                  t.active
+                    ? "border-[var(--accent-border)] bg-[var(--accent-soft)]/30"
+                    : "border-border bg-[var(--surface-solid)] hover:border-border-hover"
                 }`}
               >
-                <span
-                  className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all ${
-                    t.active ? "left-[1.15rem]" : "left-0.5"
-                  }`}
+                <button
+                  role="switch"
+                  aria-checked={t.active}
+                  onClick={() => toggleActive(t)}
+                  className={`toggle-switch ${t.active ? "data-[state=on]" : ""}`}
+                  data-state={t.active ? "on" : "off"}
                 />
-              </button>
-              <div className="min-w-0 flex-1">
-                <p className="truncate font-medium">{t.name}</p>
-                <Keywords zh={t.keywordsZh} en={t.keywordsEn} />
-              </div>
-              <div className="flex shrink-0 items-center gap-1 text-xs">
-                <span className="mr-1 hidden text-neutral-400 sm:inline">生成</span>
-                {[1, 7].map((d) => (
+
+                <div className="min-w-0 flex-1">
+                  <p className="text-[15px] font-medium text-text-primary">{t.name}</p>
+                  <Keywords zh={t.keywordsZh} en={t.keywordsEn} />
+                </div>
+
+                <div className="flex shrink-0 items-center gap-2">
                   <button
-                    key={d}
-                    onClick={() => generate(t.id, d)}
+                    onClick={() => generate(t.id, 1)}
                     disabled={generating !== null}
-                    className="rounded-full border border-black/15 px-3 py-1 hover:bg-black/5 disabled:opacity-40 dark:border-white/20 dark:hover:bg-white/10"
+                    className="btn-capsule btn-secondary px-3 py-1.5 text-[12px] disabled:opacity-40"
                   >
-                    {generating === `${t.id}-${d}`
-                      ? d === 1
-                        ? "生成中…"
-                        : "生成中…"
-                      : d === 1
-                        ? "日报"
-                        : "周报"}
+                    {generating === `${t.id}-1` ? "..." : "Daily"}
                   </button>
-                ))}
+                  <button
+                    onClick={() => generate(t.id, 7)}
+                    disabled={generating !== null}
+                    className="btn-capsule btn-secondary px-3 py-1.5 text-[12px] disabled:opacity-40"
+                  >
+                    {generating === `${t.id}-7` ? "..." : "Weekly"}
+                  </button>
+                  <button
+                    onClick={() => remove(t)}
+                    className="rounded-md p-1.5 text-text-tertiary opacity-0 transition-all duration-200 hover:bg-[var(--danger)]/10 hover:text-[var(--danger)] group-hover:opacity-100"
+                    aria-label={`Delete ${t.name}`}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M3 6h18" />
+                      <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+                      <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+                    </svg>
+                  </button>
+                </div>
               </div>
-              <button
-                onClick={() => remove(t)}
-                className="shrink-0 text-xs text-neutral-400 hover:text-red-500"
-              >
-                删除
-              </button>
-            </li>
-          ))}
-          {topics.length === 0 && (
-            <li className="px-4 py-6 text-sm text-neutral-400">
-              还没有主题，从下方推荐中挑选或自定义一个吧。
-            </li>
-          )}
-        </ul>
+            ))}
+          </div>
+        )}
+
         {generating !== null && (
-          <p className="mt-2 text-xs text-neutral-400">
-            正在采集全球信源并生成报告，完成后会自动跳转…
-          </p>
+          <div className="mt-4 flex items-center gap-3 rounded-[var(--radius-md)] bg-[var(--accent-soft)] px-4 py-3">
+            <div className="h-4 w-4 animate-spin rounded-full border-2 border-[var(--accent)] border-t-transparent" />
+            <p className="text-[13px] text-[var(--accent)]">
+              Collecting sources and generating briefing...
+            </p>
+          </div>
         )}
       </section>
 
+      {/* Preset suggestions */}
       {availablePresets.length > 0 && (
         <section>
-          <h2 className="text-sm font-medium text-neutral-500">推荐主题</h2>
-          <div className="mt-3 flex flex-wrap gap-2">
+          <h2 className="mb-3 text-[13px] font-medium uppercase tracking-wider text-text-tertiary">
+            Suggested Topics
+          </h2>
+          <div className="flex flex-wrap gap-2">
             {availablePresets.map((p) => (
               <button
                 key={p.name}
                 onClick={() => addPreset(p.name)}
-                className="rounded-full border border-dashed border-black/20 px-3 py-1.5 text-sm text-neutral-600 hover:border-neutral-900 hover:text-neutral-900 dark:border-white/25 dark:text-neutral-400 dark:hover:border-neutral-100 dark:hover:text-neutral-100"
+                className="btn-capsule btn-secondary text-[13px]"
               >
-                + {p.name}
+                <span className="text-text-tertiary">+</span>
+                {p.name}
               </button>
             ))}
           </div>
         </section>
       )}
 
+      {/* Custom topic composer */}
       <section>
-        <h2 className="text-sm font-medium text-neutral-500">自定义主题</h2>
-        <form onSubmit={addCustom} className="mt-3 space-y-3">
-          <input
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-            placeholder="主题名称（可选，如：新能源汽车）"
-            className="w-full rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm outline-none focus:border-neutral-900 dark:border-white/20 dark:focus:border-neutral-100"
-          />
-          <input
-            value={newKeywords}
-            onChange={(e) => setNewKeywords(e.target.value)}
-            required
-            placeholder="关键词，逗号分隔（中文走中文源，英文走英文源）"
-            className="w-full rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm outline-none focus:border-neutral-900 dark:border-white/20 dark:focus:border-neutral-100"
-          />
-          {error && <p className="text-sm text-red-500">{error}</p>}
+        {!composerOpen ? (
           <button
-            type="submit"
-            className="rounded-full bg-neutral-900 px-4 py-1.5 text-sm font-medium text-white disabled:opacity-40 dark:bg-neutral-100 dark:text-neutral-900"
+            onClick={() => setComposerOpen(true)}
+            className="card-surface w-full px-5 py-4 text-left transition-all hover:shadow-[var(--shadow-md)]"
           >
-            添加主题
+            <div className="flex items-center gap-3">
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--accent-soft)] text-[var(--accent)]">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="12" y1="5" x2="12" y2="19" />
+                  <line x1="5" y1="12" x2="19" y2="12" />
+                </svg>
+              </div>
+              <div>
+                <p className="text-[14px] font-medium text-text-primary">Create a custom topic</p>
+                <p className="text-[12px] text-text-tertiary">Define your own keywords for targeted briefings</p>
+              </div>
+            </div>
           </button>
-        </form>
+        ) : (
+          <div className="card-surface p-5">
+            <div className="flex items-center justify-between">
+              <h3 className="text-[14px] font-medium text-text-primary">Custom Topic</h3>
+              <button
+                onClick={() => { setComposerOpen(false); setError(null); }}
+                className="rounded-md p-1 text-text-tertiary hover:text-text-primary"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </div>
+            <form onSubmit={addCustom} className="mt-4 space-y-3">
+              <input
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                placeholder="Topic name (optional)"
+                className="input-apple"
+              />
+              <input
+                value={newKeywords}
+                onChange={(e) => setNewKeywords(e.target.value)}
+                required
+                placeholder="Keywords, comma-separated"
+                className="input-apple"
+                autoFocus
+              />
+              {error && <p className="text-[13px] text-[var(--danger)]">{error}</p>}
+              <button
+                type="submit"
+                className="btn-capsule btn-primary text-[13px] disabled:opacity-40"
+                disabled={!newKeywords}
+              >
+                Add Topic
+              </button>
+            </form>
+          </div>
+        )}
       </section>
     </div>
   );
