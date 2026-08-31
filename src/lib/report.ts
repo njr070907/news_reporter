@@ -161,6 +161,49 @@ function hasEventSection(markdown: string, rangeDays: number): boolean {
   });
 }
 
+function fallbackTitle(article: Article): string {
+  return article.title.replace(/\s+/g, " ").trim() || "未命名事件";
+}
+
+function buildDeterministicFallbackReport(
+  articles: Article[],
+  rangeDays: number,
+): string {
+  const overviewTitle = rangeDays > 1 ? "本周要点" : "今日要点";
+  const overview = articles
+    .slice(0, 5)
+    .map((article) => `- ${fallbackTitle(article)} [${article.id}]`)
+    .join("\n");
+  const sections = articles.map((article) => {
+    const detail = (article.content ?? article.snippet ?? "")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 1600);
+    const body = detail || "材料仅提供标题，未获取到正文；本节不补充材料之外的事实。";
+    return [
+      `## ${fallbackTitle(article)}`,
+      body,
+      "",
+      `**来源：** [${article.id} · ${article.publisher}](${articleUrl(article)})`,
+    ].join("\n");
+  });
+  const sourceLines = articles.map(
+    (article) =>
+      `- [${article.id}] ${article.title} — ${article.publisher} · ${fmtTime(article)} · ${articleUrl(article)}`,
+  );
+  return [
+    `## ${overviewTitle}`,
+    overview || "- 暂无可提炼的头条要点",
+    "",
+    ...sections,
+    "",
+    "## 信源清单",
+    sourceLines.join("\n"),
+  ]
+    .join("\n")
+    .trim();
+}
+
 export async function generateReport(
   topic: Topic,
   articles: Article[],
@@ -185,10 +228,25 @@ export async function generateReportWithMetadata(
     },
     { role: "user" as const, content: buildUserPrompt(topic, articles, rangeDays) },
   ];
-  let result = await chatWithMetadata(messages, {
-    temperature: provider === "local" ? 0.1 : 0.2,
-    provider,
-  });
+  const startedAt = Date.now();
+  let result: Awaited<ReturnType<typeof chatWithMetadata>>;
+  try {
+    result = await chatWithMetadata(messages, {
+      temperature: provider === "local" ? 0.1 : 0.2,
+      provider,
+    });
+  } catch (error) {
+    if (provider !== "local") throw error;
+    const localModel = requireLlmConfig("local").model;
+    return {
+      markdown: buildDeterministicFallbackReport(articles, rangeDays),
+      generation: {
+        provider: "local",
+        model: `${localModel} (本地兜底)`,
+        generationMs: Date.now() - startedAt,
+      },
+    };
+  }
   let markdown = normalizeReportMarkdown(result.content, articles, rangeDays);
 
   if (
@@ -200,12 +258,21 @@ export async function generateReportWithMetadata(
     const remote = await chatWithMetadata(messages, { temperature: 0.2, provider: "remote" });
     result = {
       ...remote,
-      generation: { ...remote.generation, fallbackFrom: "local" },
+      generation: { ...remote.generation, fallbackFrom: "local" as const },
     };
     markdown = normalizeReportMarkdown(result.content, articles, rangeDays);
   }
 
   if (!hasEventSection(result.content, rangeDays)) {
+    if (result.generation.provider === "local") {
+      return {
+        markdown: buildDeterministicFallbackReport(articles, rangeDays),
+        generation: {
+          ...result.generation,
+          model: `${result.generation.model} (本地兜底)`,
+        },
+      };
+    }
     throw new Error("LLM 返回的报告格式不完整：缺少事件级标题，请切换更强模型或启用远程 fallback");
   }
   return {
