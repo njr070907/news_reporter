@@ -22,7 +22,10 @@ CREATE TABLE IF NOT EXISTS reports(
   markdown TEXT NOT NULL,
   sources_json TEXT NOT NULL DEFAULT '[]',
   created_at TEXT NOT NULL,
-  range_days INTEGER NOT NULL DEFAULT 1
+  range_days INTEGER NOT NULL DEFAULT 1,
+  llm_provider TEXT NOT NULL DEFAULT 'remote',
+  llm_model TEXT NOT NULL DEFAULT '',
+  generation_ms INTEGER
 );
 CREATE TABLE IF NOT EXISTS feedback(
   id TEXT PRIMARY KEY,

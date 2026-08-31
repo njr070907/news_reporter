@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { PRESET_TOPICS } from "@/lib/presets";
 import type { TopicItem } from "./page";
@@ -8,6 +8,23 @@ import { useToast } from "@/components/ToastProvider";
 
 interface Props {
   initialTopics: TopicItem[];
+}
+
+type LlmProvider = "local" | "remote";
+
+interface LlmOption {
+  id: LlmProvider;
+  label: string;
+  model: string;
+  available: boolean;
+  description: string;
+}
+
+interface LlmOptionsResponse {
+  activeProvider: LlmProvider;
+  fallbackRemote: boolean;
+  preGeneratedOnly: boolean;
+  options: LlmOption[];
 }
 
 function Keywords({ zh, en }: { zh: string[]; en: string[] }) {
@@ -29,6 +46,32 @@ export default function TopicsClient({ initialTopics }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [generating, setGenerating] = useState<string | null>(null);
   const [composerOpen, setComposerOpen] = useState(false);
+  const [llmOptions, setLlmOptions] = useState<LlmOptionsResponse | null>(null);
+  const [selectedProvider, setSelectedProvider] = useState<LlmProvider | null>(null);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void fetch("/api/llm", { signal: controller.signal, cache: "no-store" })
+      .then(async (res) => {
+        if (!res.ok) return null;
+        return (await res.json()) as LlmOptionsResponse;
+      })
+      .then((data) => {
+        if (!data) return;
+        setLlmOptions(data);
+        if (data.preGeneratedOnly) {
+          setSelectedProvider(null);
+        } else {
+          const preferred = data.options.find(
+            (option) => option.id === data.activeProvider && option.available,
+          );
+          const firstAvailable = data.options.find((option) => option.available);
+          setSelectedProvider(preferred?.id ?? firstAvailable?.id ?? null);
+        }
+      })
+      .catch(() => {});
+    return () => controller.abort();
+  }, []);
 
   const presetNames = useMemo(() => new Set(topics.map((t) => t.name)), [topics]);
   const availablePresets = PRESET_TOPICS.filter((p) => !presetNames.has(p.name));
@@ -147,9 +190,17 @@ export default function TopicsClient({ initialTopics }: Props) {
       const res = await fetch("/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ topicId, days }),
+        body: JSON.stringify({
+          topicId,
+          days,
+          ...(selectedProvider ? { llmProvider: selectedProvider } : {}),
+        }),
       });
-      const data = (await res.json()) as { reportId?: string; error?: string };
+      const data = (await res.json()) as {
+        reportId?: string;
+        error?: string;
+        code?: string;
+      };
       if (!res.ok || !data.reportId) {
         setError(data.error ?? "Generation failed");
         return;
@@ -173,6 +224,77 @@ export default function TopicsClient({ initialTopics }: Props) {
           {topics.length} topics shaping your briefing.
         </p>
       </div>
+
+      {/* LLM selection */}
+      <section className="card-surface p-5 md:p-6">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-[15px] font-semibold text-text-primary">Briefing engine</h2>
+            <p className="mt-1 text-[13px] text-text-secondary">
+              {llmOptions?.preGeneratedOnly
+                ? "Briefings are prepared once a day on the owner's local model."
+                : "Choose where each new briefing is generated."}
+            </p>
+          </div>
+          {selectedProvider && (
+            <span className="rounded-full bg-[var(--accent-soft)] px-3 py-1 text-[12px] font-medium text-[var(--accent)]">
+              {llmOptions?.options.find((option) => option.id === selectedProvider)?.model}
+            </span>
+          )}
+        </div>
+
+        {llmOptions?.preGeneratedOnly ? (
+          <div className="mt-4 rounded-[var(--radius-md)] border border-[var(--accent-border)] bg-[var(--accent-soft)]/40 p-4">
+            <p className="text-[14px] font-medium text-text-primary">Local daily delivery</p>
+            <p className="mt-1 text-[12px] leading-relaxed text-text-secondary">
+              每日简报会提前生成并上传。点击 Daily 时直接打开已准备好的内容，不会让你的浏览器等待模型生成。
+            </p>
+          </div>
+        ) : llmOptions ? (
+          <div className="mt-4 grid gap-3 md:grid-cols-2" role="radiogroup" aria-label="Briefing engine">
+            {llmOptions.options.map((option) => {
+              const selected = selectedProvider === option.id;
+              return (
+                <button
+                  key={option.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={selected}
+                  disabled={!option.available}
+                  onClick={() => setSelectedProvider(option.id)}
+                  className={`rounded-[var(--radius-md)] border p-4 text-left transition-all ${
+                    selected
+                      ? "border-[var(--accent)] bg-[var(--accent-soft)]/50"
+                      : option.available
+                        ? "border-border bg-[var(--surface-solid)] hover:border-border-hover"
+                        : "cursor-not-allowed border-border bg-[var(--surface-solid)] opacity-50"
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-[14px] font-medium text-text-primary">{option.label}</span>
+                    <span className={`h-2 w-2 rounded-full ${option.available ? "bg-[var(--success)]" : "bg-text-tertiary"}`} />
+                  </div>
+                  <p className="mt-1 text-[12px] text-text-tertiary">{option.model}</p>
+                  <p className="mt-3 text-[12px] leading-relaxed text-text-secondary">
+                    {option.available ? option.description : "当前环境未配置"}
+                  </p>
+                </button>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
+            <div className="skeleton h-[116px] rounded-[var(--radius-md)]" />
+            <div className="skeleton h-[116px] rounded-[var(--radius-md)]" />
+          </div>
+        )}
+
+        {llmOptions?.fallbackRemote && selectedProvider === "local" && (
+          <p className="mt-3 text-[12px] text-text-tertiary">
+            本地模型失败或输出格式不完整且已显式启用云端 fallback 时，才会尝试云端。
+          </p>
+        )}
+      </section>
 
       {/* Interest cloud */}
       {activeTopics.length > 0 && (
@@ -215,7 +337,7 @@ export default function TopicsClient({ initialTopics }: Props) {
             {topics.map((t) => (
               <div
                 key={t.id}
-                className={`group flex items-center gap-4 rounded-[var(--radius-lg)] border px-5 py-4 transition-all duration-280 ${
+                className={`group flex flex-wrap items-center gap-4 rounded-[var(--radius-lg)] border px-5 py-4 transition-all duration-280 ${
                   t.active
                     ? "border-[var(--accent-border)] bg-[var(--accent-soft)]/30"
                     : "border-border bg-[var(--surface-solid)] hover:border-border-hover"
@@ -273,6 +395,9 @@ export default function TopicsClient({ initialTopics }: Props) {
               Collecting sources and generating briefing...
             </p>
           </div>
+        )}
+        {error && !composerOpen && (
+          <p className="mt-3 text-[13px] text-[var(--danger)]">{error}</p>
         )}
       </section>
 

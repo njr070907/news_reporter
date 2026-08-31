@@ -27,6 +27,9 @@ export interface ReportRow {
   sources_json: string;
   created_at: string;
   range_days: number;
+  llm_provider: "local" | "remote";
+  llm_model: string;
+  generation_ms: number | null;
 }
 
 interface DbDriver {
@@ -120,6 +123,11 @@ export async function getTopic(
   ]);
 }
 
+export async function getTopicById(topicId: string): Promise<TopicRow | undefined> {
+  const db = await getDriver();
+  return db.get<TopicRow>("SELECT * FROM topics WHERE id = ?", [topicId]);
+}
+
 export async function insertTopic(input: {
   userId: string;
   name: string;
@@ -193,15 +201,33 @@ export async function saveReport(input: {
   markdown: string;
   sourcesJson: string;
   rangeDays: number;
+  llmProvider?: "local" | "remote";
+  llmModel?: string;
+  generationMs?: number;
 }): Promise<ReportRow> {
   const existing = await findReportByPeriod(input.topicId, input.date, input.rangeDays);
   const db = await getDriver();
   if (existing) {
     await db.run(
-      "UPDATE reports SET markdown = ?, sources_json = ?, created_at = ? WHERE id = ?",
-      [input.markdown, input.sourcesJson, nowIso(), existing.id],
+      "UPDATE reports SET markdown = ?, sources_json = ?, created_at = ?, llm_provider = ?, llm_model = ?, generation_ms = ? WHERE id = ?",
+      [
+        input.markdown,
+        input.sourcesJson,
+        nowIso(),
+        input.llmProvider ?? existing.llm_provider,
+        input.llmModel ?? existing.llm_model,
+        input.generationMs ?? existing.generation_ms,
+        existing.id,
+      ],
     );
-    return { ...existing, markdown: input.markdown, sources_json: input.sourcesJson };
+    return {
+      ...existing,
+      markdown: input.markdown,
+      sources_json: input.sourcesJson,
+      llm_provider: input.llmProvider ?? existing.llm_provider,
+      llm_model: input.llmModel ?? existing.llm_model,
+      generation_ms: input.generationMs ?? existing.generation_ms,
+    };
   }
   const row: ReportRow = {
     id: crypto.randomUUID(),
@@ -211,9 +237,12 @@ export async function saveReport(input: {
     sources_json: input.sourcesJson,
     created_at: nowIso(),
     range_days: input.rangeDays,
+    llm_provider: input.llmProvider ?? "remote",
+    llm_model: input.llmModel ?? "",
+    generation_ms: input.generationMs ?? null,
   };
   await db.run(
-    "INSERT INTO reports(id, topic_id, date, markdown, sources_json, created_at, range_days) VALUES(?,?,?,?,?,?,?)",
+    "INSERT INTO reports(id, topic_id, date, markdown, sources_json, created_at, range_days, llm_provider, llm_model, generation_ms) VALUES(?,?,?,?,?,?,?,?,?,?)",
     [
       row.id,
       row.topic_id,
@@ -222,6 +251,9 @@ export async function saveReport(input: {
       row.sources_json,
       row.created_at,
       row.range_days,
+      row.llm_provider,
+      row.llm_model,
+      row.generation_ms,
     ],
   );
   return row;

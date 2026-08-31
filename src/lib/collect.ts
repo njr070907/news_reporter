@@ -3,6 +3,43 @@ import { fetchGoogleNews } from "./sources/google-news";
 import { fetchBingNews } from "./sources/bing-news";
 
 export const MAX_ARTICLES = 40;
+const DEFAULT_CACHE_TTL_MS = 5 * 60 * 1000;
+
+interface CachedCollectResult {
+  expiresAt: number;
+  articles: Article[];
+  errors: string[];
+}
+
+const g = globalThis as unknown as {
+  __nrCollectCache?: Map<string, CachedCollectResult>;
+};
+
+function cache(): Map<string, CachedCollectResult> {
+  if (!g.__nrCollectCache) g.__nrCollectCache = new Map();
+  return g.__nrCollectCache;
+}
+
+function cacheTtl(): number {
+  const value = Number.parseInt(process.env.COLLECT_CACHE_TTL_MS ?? "", 10);
+  if (!Number.isFinite(value)) return DEFAULT_CACHE_TTL_MS;
+  return Math.min(Math.max(value, 0), 60 * 60 * 1000);
+}
+
+function cloneArticle(article: Article): Article {
+  return {
+    ...article,
+    publishedAt: article.publishedAt ? new Date(article.publishedAt) : null,
+  };
+}
+
+function cacheKey(topic: Topic, days: number): string {
+  return JSON.stringify({
+    days,
+    zh: [...topic.keywordsZh].map((k) => k.trim().toLowerCase()).sort(),
+    en: [...topic.keywordsEn].map((k) => k.trim().toLowerCase()).sort(),
+  });
+}
 
 function normalizeUrl(url: string): string {
   try {
@@ -23,6 +60,16 @@ export async function collectArticles(
   topic: Topic,
   days = 1,
 ): Promise<CollectResult> {
+  const key = cacheKey(topic, days);
+  const cached = cache().get(key);
+  if (cached && cached.expiresAt > Date.now()) {
+    return {
+      articles: cached.articles.map(cloneArticle),
+      errors: [...cached.errors],
+    };
+  }
+  if (cached) cache().delete(key);
+
   const jobs: Array<{ label: string; run: () => Promise<Article[]> }> = [];
   for (const kw of topic.keywordsZh) {
     jobs.push({
@@ -66,6 +113,11 @@ export async function collectArticles(
   if (merged.length > MAX_ARTICLES) merged.length = MAX_ARTICLES;
   merged.forEach((a, i) => {
     a.id = `S${i + 1}`;
+  });
+  cache().set(key, {
+    expiresAt: Date.now() + cacheTtl(),
+    articles: merged.map(cloneArticle),
+    errors: [...errors],
   });
   return { articles: merged, errors };
 }

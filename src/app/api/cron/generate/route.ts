@@ -103,6 +103,9 @@ async function runTask(force: boolean): Promise<void> {
               markdown: result.markdown,
               sourcesJson,
               rangeDays: 1,
+              llmProvider: result.generation.provider,
+              llmModel: result.generation.model,
+              generationMs: result.generation.generationMs,
             });
           }
           generated++;

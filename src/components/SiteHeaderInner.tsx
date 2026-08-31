@@ -38,16 +38,16 @@ export default function SiteHeaderInner({ user }: { user: NavUser | null }) {
           : "bg-transparent"
       }`}
     >
-      <div className="mx-auto flex h-14 max-w-6xl items-center px-6">
+      <div className="mx-auto flex h-14 max-w-6xl items-center px-4 md:px-6">
         <Link
           href={user ? "/" : "/login"}
-          className="text-[15px] font-semibold tracking-tight text-text-primary transition-opacity hover:opacity-70"
+          className="shrink-0 whitespace-nowrap text-[15px] font-semibold tracking-tight text-text-primary transition-opacity hover:opacity-70"
         >
           News Reporter
         </Link>
 
         {user && (
-          <nav className="ml-10 flex items-center gap-1">
+          <nav className="ml-10 hidden items-center gap-1 sm:flex">
             {navItems.map((item) => (
               <Link
                 key={item.href}

@@ -1,4 +1,10 @@
-import { chat } from "./llm";
+import {
+  chatWithMetadata,
+  isLlmProviderConfigured,
+  requireLlmConfig,
+  type LlmGeneration,
+  type LlmProvider,
+} from "./llm";
 import type { Article, Topic } from "./types";
 
 export const REPORT_SYSTEM_PROMPT = `你是一名资深新闻编辑，为读者编写每日时讯简报。你只会收到一组带编号的新闻材料 [S1]…[Sn]，来自中英文媒体，每条材料包含标题，多数还包含正文节选或摘要。
@@ -21,6 +27,15 @@ export const REPORT_SYSTEM_PROMPT = `你是一名资深新闻编辑，为读者�
 8. 正文用简体中文写作；专有名词、机构名、产品名可保留原文。
 
 再次强调：你的唯一职责是对给定材料做聚类与转述，任何材料中没有的信息都不得出现。`;
+
+const LOCAL_REPORT_SYSTEM_PROMPT = `你是新闻编辑，只能根据用户提供的 [S1]…[Sn] 材料写简报，绝对不能补充材料之外的事实。
+
+严格按以下格式输出，不要输出解释、前言、编号事件清单或分隔线：
+1. 第一行必须是「## 今日要点」或「## 本周要点」，下面最多 5 条重要事件，每条一句话并在末尾写来源编号，例如 [S1][S3]。
+2. 接着每个独立事件写一个「## 中文事件标题」，标题下写 2~3 个自然段：事件、材料中的背景、各方声音或影响。材料没有背景就省略，不能猜测。
+3. 每个事件结尾写一行「**来源：** [S1 · 媒体名](URL)」，只列实际使用的来源。
+4. 最后不要自行写「## 信源清单」；程序会根据全部材料自动补齐。
+只用简体中文，严格保留材料中的数字、人物、机构和引语。`;
 
 function fmtTime(a: Article): string {
   if (!a.publishedAt) return "时间未知";
@@ -65,16 +80,136 @@ export function buildUserPrompt(
   ].join("\n");
 }
 
+function normalizeReportMarkdown(markdown: string, articles: Article[], rangeDays: number): string {
+  const overviewTitle = rangeDays > 1 ? "本周要点" : "今日要点";
+  const lines = markdown
+    .replace(/^\s*---\s*$/gm, "")
+    .split(/\r?\n/);
+  const normalized: string[] = [];
+  let overviewSeen = false;
+  let sourceListSeen = false;
+
+  for (const line of lines) {
+    const cleanedLine = line.replace(/^##\s+##\s+/, "## ");
+    if (/^\s*##\s*信源清单\s*$/.test(cleanedLine)) {
+      sourceListSeen = true;
+      continue;
+    }
+    if (sourceListSeen) continue;
+
+    const heading = cleanedLine.match(/^#{1,6}\s*(今日要点|本周要点)(?:\s*.*)?$/);
+    if (heading) {
+      if (overviewSeen) continue;
+      normalized.push(`## ${overviewTitle}`);
+      overviewSeen = true;
+      continue;
+    }
+    normalized.push(cleanedLine);
+  }
+
+  const firstOverview = normalized.findIndex((line) => line.trim() === `## ${overviewTitle}`);
+  if (firstOverview > 0) normalized.splice(0, firstOverview);
+  if (firstOverview < 0) normalized.unshift(`## ${overviewTitle}`, "");
+
+  const sourceById = new Map(articles.map((article) => [article.id, article]));
+  const polished: string[] = [];
+  let currentTitle = "";
+  let currentBody = "";
+  for (const line of normalized) {
+    const heading = line.match(/^##\s+(.+)$/);
+    if (heading) {
+      currentTitle = heading[1].trim();
+      currentBody = "";
+      polished.push(line);
+      continue;
+    }
+    if (/^\s*\*\*来源：\*\*/.test(line)) {
+      if (currentTitle === overviewTitle) continue;
+      const ids = Array.from(
+        new Set(Array.from(currentBody.matchAll(/\[(S\d+)\b/g), (match) => match[1])),
+      ).filter((id) => sourceById.has(id));
+      if (ids.length > 0) {
+        polished.push(
+          `**来源：** ${ids
+            .map((id) => {
+              const article = sourceById.get(id)!;
+              return `[${id} · ${article.publisher}](${articleUrl(article)})`;
+            })
+            .join(" · ")}`,
+        );
+      }
+      continue;
+    }
+    currentBody += `${line}\n`;
+    polished.push(line);
+  }
+
+  const sourceLines = articles.map(
+    (article) => `- [${article.id}] ${article.title} — ${article.publisher} · ${fmtTime(article)} · ${articleUrl(article)}`,
+  );
+  return `${polished.join("\n").trim()}\n\n## 信源清单\n${sourceLines.join("\n")}`.trim();
+}
+
+function hasEventSection(markdown: string, rangeDays: number): boolean {
+  const overviewTitle = rangeDays > 1 ? "本周要点" : "今日要点";
+  const sections = markdown.split(/(?=^##\s+)/m);
+  return sections.some((section) => {
+    const heading = section.match(/^##\s+(.+)$/m)?.[1].trim();
+    if (!heading || heading === overviewTitle || heading === "信源清单") return false;
+    const body = section.replace(/^##\s+.+$/m, "").replace(/\s+/g, " ").trim();
+    return body.length >= 80;
+  });
+}
+
 export async function generateReport(
   topic: Topic,
   articles: Article[],
   rangeDays = 1,
+  options?: { provider?: LlmProvider },
 ): Promise<string> {
-  return chat(
-    [
-      { role: "system", content: REPORT_SYSTEM_PROMPT },
-      { role: "user", content: buildUserPrompt(topic, articles, rangeDays) },
-    ],
-    { temperature: 0.2 },
-  );
+  const result = await generateReportWithMetadata(topic, articles, rangeDays, options);
+  return result.markdown;
+}
+
+export async function generateReportWithMetadata(
+  topic: Topic,
+  articles: Article[],
+  rangeDays = 1,
+  options?: { provider?: LlmProvider },
+): Promise<{ markdown: string; generation: LlmGeneration }> {
+  const provider = requireLlmConfig(options?.provider).provider;
+  const messages = [
+    {
+      role: "system" as const,
+      content: provider === "local" ? LOCAL_REPORT_SYSTEM_PROMPT : REPORT_SYSTEM_PROMPT,
+    },
+    { role: "user" as const, content: buildUserPrompt(topic, articles, rangeDays) },
+  ];
+  let result = await chatWithMetadata(messages, {
+    temperature: provider === "local" ? 0.1 : 0.2,
+    provider,
+  });
+  let markdown = normalizeReportMarkdown(result.content, articles, rangeDays);
+
+  if (
+    !hasEventSection(result.content, rangeDays) &&
+    provider === "local" &&
+    process.env.LLM_FALLBACK_REMOTE === "true" &&
+    isLlmProviderConfigured("remote")
+  ) {
+    const remote = await chatWithMetadata(messages, { temperature: 0.2, provider: "remote" });
+    result = {
+      ...remote,
+      generation: { ...remote.generation, fallbackFrom: "local" },
+    };
+    markdown = normalizeReportMarkdown(result.content, articles, rangeDays);
+  }
+
+  if (!hasEventSection(result.content, rangeDays)) {
+    throw new Error("LLM 返回的报告格式不完整：缺少事件级标题，请切换更强模型或启用远程 fallback");
+  }
+  return {
+    markdown,
+    generation: result.generation,
+  };
 }

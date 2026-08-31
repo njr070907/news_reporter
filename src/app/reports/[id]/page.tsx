@@ -53,6 +53,9 @@ export default async function ReportDetailPage({
     hour: "2-digit",
     minute: "2-digit",
   });
+  const engine = report.llm_model
+    ? `${report.llm_provider === "local" ? "Local" : "Cloud"} · ${report.llm_model}`
+    : null;
 
   return (
     <article className="page-enter mx-auto max-w-[720px] px-6 py-12 md:py-16">
@@ -102,6 +105,18 @@ export default async function ReportDetailPage({
             </svg>
             {createdTime}
           </span>
+          {engine && (
+            <span className="flex items-center gap-1.5">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="4" width="18" height="16" rx="2" />
+                <path d="M7 8h10M7 12h6M7 16h4" />
+              </svg>
+              {engine}
+            </span>
+          )}
+          {report.generation_ms !== null && (
+            <span>{(report.generation_ms / 1000).toFixed(1)}s generation</span>
+          )}
         </div>
       </header>
 

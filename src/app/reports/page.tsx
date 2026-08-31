@@ -66,6 +66,9 @@ export default async function ReportsPage() {
               <div className="space-y-2">
                 {items.map((r, idx) => {
                   const sources = JSON.parse(r.sources_json) as unknown[];
+                  const engine = r.llm_model
+                    ? `${r.llm_provider === "local" ? "Local" : "Cloud"} · ${r.llm_model}`
+                    : null;
                   const createdTime = new Date(
                     new Date(r.created_at).getTime() + 8 * 3600000
                   ).toLocaleTimeString("zh-CN", {
@@ -94,6 +97,12 @@ export default async function ReportsPage() {
                             <span>{sources.length} sources</span>
                             <span className="text-text-tertiary">·</span>
                             <span>{createdTime} generated</span>
+                            {engine && (
+                              <>
+                                <span className="text-text-tertiary">·</span>
+                                <span>{engine}</span>
+                              </>
+                            )}
                           </div>
                         </div>
                         <div className="mt-1 shrink-0 text-text-tertiary transition-all duration-200 group-hover:translate-x-1 group-hover:text-[var(--accent)]">

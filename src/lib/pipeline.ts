@@ -1,6 +1,7 @@
 import { collectArticles } from "./collect";
 import { enrichArticles } from "./enrich";
-import { generateReport } from "./report";
+import { generateReportWithMetadata } from "./report";
+import type { LlmProvider } from "./llm";
 import type { ReportSource, Topic } from "./types";
 
 export class NoArticlesError extends Error {
@@ -12,13 +13,23 @@ export class NoArticlesError extends Error {
 export interface PipelineResult {
   markdown: string;
   sources: ReportSource[];
+  generation: {
+    provider: LlmProvider;
+    model: string;
+    generationMs: number;
+    fallbackFrom?: LlmProvider;
+  };
 }
 
-export async function runPipeline(topic: Topic, rangeDays = 1): Promise<PipelineResult> {
+export async function runPipeline(
+  topic: Topic,
+  rangeDays = 1,
+  options?: { provider?: LlmProvider },
+): Promise<PipelineResult> {
   const { articles } = await collectArticles(topic, rangeDays);
   if (articles.length === 0) throw new NoArticlesError();
   await enrichArticles(articles);
-  const markdown = await generateReport(topic, articles, rangeDays);
+  const generated = await generateReportWithMetadata(topic, articles, rangeDays, options);
   const sources: ReportSource[] = articles.map((a) => ({
     sid: a.id,
     title: a.title,
@@ -28,5 +39,5 @@ export async function runPipeline(topic: Topic, rangeDays = 1): Promise<Pipeline
     lang: a.lang,
     imageUrl: a.imageUrl ?? null,
   }));
-  return { markdown, sources };
+  return { markdown: generated.markdown, sources, generation: generated.generation };
 }

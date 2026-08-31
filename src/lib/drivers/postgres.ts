@@ -30,6 +30,15 @@ async function migrate(sql: PgClient): Promise<void> {
     "ALTER TABLE reports ADD COLUMN IF NOT EXISTS range_days INTEGER NOT NULL DEFAULT 1",
   );
   await sql.unsafe(
+    "ALTER TABLE reports ADD COLUMN IF NOT EXISTS llm_provider TEXT NOT NULL DEFAULT 'remote'",
+  );
+  await sql.unsafe(
+    "ALTER TABLE reports ADD COLUMN IF NOT EXISTS llm_model TEXT NOT NULL DEFAULT ''",
+  );
+  await sql.unsafe(
+    "ALTER TABLE reports ADD COLUMN IF NOT EXISTS generation_ms INTEGER",
+  );
+  await sql.unsafe(
     "ALTER TABLE reports DROP CONSTRAINT IF EXISTS reports_topic_id_date_key",
   );
   await sql.unsafe("ALTER TABLE reports DROP CONSTRAINT IF EXISTS reports_range_unique");

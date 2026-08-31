@@ -16,6 +16,40 @@ bun dev
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
+## Local daily delivery
+
+The recommended production flow is to generate daily briefings on the local machine with Ollama, then upload the finished reports to Railway. Users read the pre-generated report immediately; they never connect to Ollama directly.
+
+Set these variables in the local `.env.local`:
+
+```bash
+LLM_PROVIDER=local
+LOCAL_LLM_MODEL=qwen3.5:4b
+LOCAL_SYNC_BASE_URL=https://news-reporter-web-production.up.railway.app
+LOCAL_SYNC_SECRET=<same secret configured on Railway>
+```
+
+Set these variables on Railway:
+
+```bash
+REPORTS_PREGENERATED_ONLY=true
+LOCAL_SYNC_SECRET=<a random 32-byte secret>
+```
+
+Run a safe check first, which collects and generates but does not upload:
+
+```bash
+npm run report:local -- --dry-run
+```
+
+When the result looks good, run:
+
+```bash
+npm run report:local
+```
+
+Schedule `npm run report:local` in Windows Task Scheduler after Ollama is available, for example at 06:00 Beijing time. The old GitHub Actions schedule is now manual-only to avoid generating the same reports twice; the workflow remains available for emergency fallback.
+
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.

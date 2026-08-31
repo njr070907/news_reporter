@@ -39,7 +39,10 @@ function migrate(): void {
         markdown TEXT NOT NULL,
         sources_json TEXT NOT NULL DEFAULT '[]',
         created_at TEXT NOT NULL,
-        range_days INTEGER NOT NULL DEFAULT 1
+        range_days INTEGER NOT NULL DEFAULT 1,
+        llm_provider TEXT NOT NULL DEFAULT 'remote',
+        llm_model TEXT NOT NULL DEFAULT '',
+        generation_ms INTEGER
       );
       INSERT INTO reports_migrated(id, topic_id, date, markdown, sources_json, created_at, range_days)
         SELECT id, topic_id, date, markdown, sources_json, created_at, 1 FROM reports;
@@ -50,6 +53,15 @@ function migrate(): void {
   db.exec(
     "CREATE UNIQUE INDEX IF NOT EXISTS ux_reports_topic_date_range ON reports(topic_id, date, range_days)",
   );
+  if (!columnExists("reports", "llm_provider")) {
+    db.exec("ALTER TABLE reports ADD COLUMN llm_provider TEXT NOT NULL DEFAULT 'remote'");
+  }
+  if (!columnExists("reports", "llm_model")) {
+    db.exec("ALTER TABLE reports ADD COLUMN llm_model TEXT NOT NULL DEFAULT ''");
+  }
+  if (!columnExists("reports", "generation_ms")) {
+    db.exec("ALTER TABLE reports ADD COLUMN generation_ms INTEGER");
+  }
 }
 
 export const sqliteDriver = {
