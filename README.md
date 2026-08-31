@@ -24,10 +24,12 @@ Set these variables in the local `.env.local`:
 
 ```bash
 LLM_PROVIDER=local
-LOCAL_LLM_MODEL=qwen3.5:4b
+LOCAL_LLM_MODEL=qwen3.5:0.8b
 LOCAL_SYNC_BASE_URL=https://news-reporter-web-production.up.railway.app
 LOCAL_SYNC_SECRET=<same secret configured on Railway>
 ```
+
+`qwen3.5:4b` can be used when higher writing quality is more important than generation speed; on a CPU-only machine it may take much longer per topic.
 
 Set these variables on Railway:
 
