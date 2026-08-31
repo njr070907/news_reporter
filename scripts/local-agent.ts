@@ -50,12 +50,16 @@ async function getConfig(event: "login" | "poll"): Promise<AgentConfig> {
 
 function runDailyGenerator(): Promise<number> {
   return new Promise((resolve) => {
-    const executable = process.platform === "win32" ? "npm.cmd" : "npm";
-    const child = spawn(executable, ["run", "report:local"], {
+    const child = spawn(
+      process.execPath,
+      ["node_modules/tsx/dist/cli.mjs", "scripts/local-daily.ts"],
+      {
       cwd: process.cwd(),
       env: process.env,
       stdio: "inherit",
-    });
+        windowsHide: true,
+      },
+    );
     child.once("error", (error) => {
       console.error(`启动本地报告任务失败：${error.message}`);
       resolve(1);
