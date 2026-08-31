@@ -9,7 +9,8 @@
     "lint": "eslint",
     "report": "tsx scripts/m1.ts",
     "report:dry": "tsx scripts/m1.ts --dry-run",
-    "report:local": "tsx scripts/local-daily.ts"
+    "report:local": "tsx scripts/local-daily.ts",
+    "report:local:agent": "tsx scripts/local-agent.ts"
   },
   "dependencies": {
     "cheerio": "^1.2.0",

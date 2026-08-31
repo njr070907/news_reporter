@@ -78,6 +78,11 @@ export async function getUserById(id: string): Promise<UserRow | undefined> {
   return db.get<UserRow>("SELECT * FROM users WHERE id = ?", [id]);
 }
 
+export async function getFirstUser(): Promise<UserRow | undefined> {
+  const db = await getDriver();
+  return db.get<UserRow>("SELECT * FROM users ORDER BY created_at ASC, id ASC LIMIT 1");
+}
+
 export async function createUser(email: string, passwordHash?: string): Promise<UserRow> {
   const user: UserRow = {
     id: crypto.randomUUID(),
@@ -121,6 +126,38 @@ export async function getTopic(
     topicId,
     userId,
   ]);
+}
+
+export async function listMissingActiveTopicIds(date: string): Promise<string[]> {
+  const db = await getDriver();
+  const rows = await db.all<{ id: string }>(
+    `SELECT t.id
+     FROM topics t
+     LEFT JOIN reports r
+       ON r.topic_id = t.id AND r.date = ? AND r.range_days = 1
+     WHERE t.active = 1 AND r.id IS NULL
+     ORDER BY t.created_at ASC`,
+    [date],
+  );
+  return rows.map((row) => row.id);
+}
+
+export async function getAppSetting(key: string): Promise<string | undefined> {
+  const db = await getDriver();
+  const row = await db.get<{ value: string }>(
+    "SELECT value FROM app_settings WHERE key = ?",
+    [key],
+  );
+  return row?.value;
+}
+
+export async function setAppSetting(key: string, value: string): Promise<void> {
+  const db = await getDriver();
+  await db.run(
+    `INSERT INTO app_settings(key, value, updated_at) VALUES(?, ?, ?)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
+    [key, value, nowIso()],
+  );
 }
 
 export async function getTopicById(topicId: string): Promise<TopicRow | undefined> {

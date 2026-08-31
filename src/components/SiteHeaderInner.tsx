@@ -8,6 +8,7 @@ import AccountPopover from "./AccountPopover";
 interface NavUser {
   email: string;
   name?: string;
+  isAdmin?: boolean;
 }
 
 export default function SiteHeaderInner({ user }: { user: NavUser | null }) {

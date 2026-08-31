@@ -38,6 +38,8 @@ REPORTS_PREGENERATED_ONLY=true
 LOCAL_SYNC_SECRET=<a random 32-byte secret>
 ```
 
+管理员登录网站后可在 `/admin` 选择北京时间、Windows 登录触发和管理员网站登录触发。网站登录本身不会直接访问本地模型；本地代理会安全地轮询设置。
+
 Run a safe check first, which collects and generates but does not upload:
 
 ```bash
@@ -50,7 +52,7 @@ When the result looks good, run:
 npm run report:local
 ```
 
-Schedule `npm run report:local` in Windows Task Scheduler after Ollama is available, for example at 06:00 Beijing time. The old GitHub Actions schedule is now manual-only to avoid generating the same reports twice; the workflow remains available for emergency fallback.
+Run `npm run report:local:agent` in Windows Task Scheduler with an **At log on** trigger. The agent starts with Windows, checks the administrator's saved schedule every five minutes, and only generates topics whose current-day report is missing. The old GitHub Actions schedule is now manual-only to avoid generating the same reports twice; the workflow remains available for emergency fallback.
 
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 

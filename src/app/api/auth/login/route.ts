@@ -5,7 +5,8 @@ import {
   insertTopic,
   setPassword,
 } from "@/lib/db";
-import { setSessionCookie } from "@/lib/auth";
+import { isAdminUser, setSessionCookie } from "@/lib/auth";
+import { markAdminLogin } from "@/lib/local-schedule";
 import { PRESET_TOPICS } from "@/lib/presets";
 import { hashPassword, verifyPassword } from "@/lib/password";
 
@@ -59,6 +60,7 @@ export async function POST(req: Request): Promise<NextResponse> {
       await setPassword(user.id, hash);
     }
     await setSessionCookie(user.id);
+    if (await isAdminUser(user)) await markAdminLogin();
     return NextResponse.json({ ok: true });
   }
 
@@ -72,5 +74,6 @@ export async function POST(req: Request): Promise<NextResponse> {
     return NextResponse.json({ error: "密码错误" }, { status: 401 });
   }
   await setSessionCookie(existing.id);
+  if (await isAdminUser(existing)) await markAdminLogin();
   return NextResponse.json({ ok: true });
 }

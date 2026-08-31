@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 
 interface AccountPopoverProps {
-  user: { email: string; name?: string } | null;
+  user: { email: string; name?: string; isAdmin?: boolean } | null;
 }
 
 export default function AccountPopover({ user }: AccountPopoverProps) {
@@ -103,6 +103,20 @@ export default function AccountPopover({ user }: AccountPopoverProps) {
               </svg>
               Briefings
             </Link>
+            {user.isAdmin && (
+              <Link
+                href="/admin"
+                onClick={close}
+                className="flex items-center gap-3 px-4 py-2 text-[13px] text-text-secondary transition-colors hover:bg-black/[0.03] hover:text-text-primary dark:hover:bg-white/[0.05]"
+                role="menuitem"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 3v18M3 12h18" />
+                  <circle cx="12" cy="12" r="8" />
+                </svg>
+                Admin
+              </Link>
+            )}
           </div>
 
           <div className="border-t border-border py-1.5">

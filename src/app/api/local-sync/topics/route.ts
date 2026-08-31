@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { listActiveTopicsAll } from "@/lib/db";
+import { listActiveTopicsAll, listMissingActiveTopicIds } from "@/lib/db";
 import { isLocalSyncRequestAuthorized, requireLocalSyncSecret } from "@/lib/local-sync";
 import { todayLocal } from "@/lib/date";
 
@@ -18,9 +18,14 @@ export async function GET(req: Request): Promise<NextResponse> {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const topics = await listActiveTopicsAll();
+  const date = todayLocal();
+  const [topics, missingTopicIds] = await Promise.all([
+    listActiveTopicsAll(),
+    listMissingActiveTopicIds(date),
+  ]);
   return NextResponse.json({
-    date: todayLocal(),
+    date,
+    missingTopicIds,
     topics: topics.map((topic) => ({
       id: topic.id,
       name: topic.name,

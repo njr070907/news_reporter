@@ -1,6 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
-import { getUserById, type UserRow } from "./db";
+import { getFirstUser, getUserById, type UserRow } from "./db";
 
 const COOKIE_NAME = "nr_session";
 
@@ -39,4 +39,16 @@ export async function getCurrentUser(): Promise<UserRow | null> {
   const expected = Buffer.from(sign(userId));
   if (sig.length !== expected.length || !timingSafeEqual(sig, expected)) return null;
   return (await getUserById(userId)) ?? null;
+}
+
+export async function isAdminUser(user: UserRow): Promise<boolean> {
+  const configuredEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase();
+  if (configuredEmail) return user.email.toLowerCase() === configuredEmail;
+  const owner = await getFirstUser();
+  return owner?.id === user.id;
+}
+
+export async function getCurrentAdmin(): Promise<UserRow | null> {
+  const user = await getCurrentUser();
+  return user && (await isAdminUser(user)) ? user : null;
 }

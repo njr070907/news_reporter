@@ -36,6 +36,11 @@ CREATE TABLE IF NOT EXISTS feedback(
   value TEXT NOT NULL,
   created_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS app_settings(
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
 CREATE INDEX IF NOT EXISTS idx_topics_user ON topics(user_id);
 CREATE INDEX IF NOT EXISTS idx_reports_topic ON reports(topic_id, date DESC);
 CREATE INDEX IF NOT EXISTS idx_feedback_user ON feedback(user_id, created_at DESC);

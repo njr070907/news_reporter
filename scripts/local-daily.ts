@@ -12,6 +12,7 @@ interface SyncTopic {
 interface TopicsResponse {
   date: string;
   topics: SyncTopic[];
+  missingTopicIds?: string[];
   error?: string;
 }
 
@@ -53,18 +54,31 @@ async function main(): Promise<void> {
   if (!secret) throw new Error("缺少 LOCAL_SYNC_SECRET：请配置本地报告同步密钥");
 
   const dryRun = process.argv.includes("--dry-run");
+  const force = process.argv.includes("--force");
   const response = await fetch(`${site}/api/local-sync/topics`, {
     headers: { Authorization: `Bearer ${secret}` },
     signal: AbortSignal.timeout(30_000),
   });
   const data = await jsonResponse<TopicsResponse>(response);
-  console.log(`目标日期：${data.date} · 活跃主题：${data.topics.length}`);
+  const pendingIds = new Set(
+    force
+      ? data.topics.map((topic) => topic.id)
+      : (data.missingTopicIds ?? data.topics.map((topic) => topic.id)),
+  );
+  const topics = data.topics.filter((topic) => pendingIds.has(topic.id));
+  console.log(
+    `目标日期：${data.date} · 活跃主题：${data.topics.length} · 待处理：${topics.length}`,
+  );
+  if (topics.length === 0) {
+    console.log("今天的报告已全部准备，跳过重复生成");
+    return;
+  }
   if (dryRun) console.log("试运行模式：不会上传报告");
 
   let generated = 0;
   let failed = 0;
   const groups = new Map<string, SyncTopic[]>();
-  for (const topic of data.topics) {
+  for (const topic of topics) {
     const group = groups.get(topicSignature(topic)) ?? [];
     group.push(topic);
     groups.set(topicSignature(topic), group);
