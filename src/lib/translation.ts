@@ -29,7 +29,7 @@ function splitSourceList(markdown: string): { body: string; sourceList: string }
 }
 
 function splitTranslationChunks(markdown: string, maxChars = 6500): string[] {
-  const sections = markdown.split(/(?=^##\s+)/m).filter((section) => section.trim());
+  const sections = markdown.split(/(?=^##\s+)/gm).filter((section) => section.trim());
   const chunks: string[] = [];
   let current = "";
   for (const section of sections) {
