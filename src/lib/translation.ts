@@ -56,6 +56,7 @@ export async function translateReportWithMetadata(
       provider: options?.provider ?? "local",
       temperature: 0.1,
       maxTokens: 6000,
+      model: process.env.LOCAL_LLM_TRANSLATION_MODEL?.trim() || undefined,
     },
   );
   const translated = cleanMarkdown(result.content);

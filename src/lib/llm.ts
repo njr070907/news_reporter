@@ -24,6 +24,7 @@ export interface ChatOptions {
   provider?: LlmProvider;
   timeoutMs?: number;
   maxTokens?: number;
+  model?: string;
 }
 
 interface ChatResult {
@@ -221,18 +222,21 @@ export async function chatWithMetadata(
 ): Promise<ChatResult> {
   const provider = getProvider(opts.provider);
   const config = requireLlmConfig(provider);
+  const configForCall = opts.model?.trim()
+    ? { ...config, model: opts.model.trim() }
+    : config;
   const startedAt = Date.now();
 
   try {
     const content =
       provider === "local"
-        ? await callLocal(messages, config, opts)
-        : await callRemote(messages, config, opts);
+        ? await callLocal(messages, configForCall, opts)
+        : await callRemote(messages, configForCall, opts);
     return {
       content,
       generation: {
         provider,
-        model: config.model,
+        model: configForCall.model,
         generationMs: Date.now() - startedAt,
       },
     };
