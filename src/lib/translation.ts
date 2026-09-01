@@ -28,7 +28,7 @@ function splitSourceList(markdown: string): { body: string; sourceList: string }
   return { body, sourceList };
 }
 
-function splitTranslationChunks(markdown: string, maxChars = 6500): string[] {
+function splitTranslationChunks(markdown: string, maxChars = 2600): string[] {
   const sections = markdown.split(/(?=^##\s+)/gm).filter((section) => section.trim());
   const chunks: string[] = [];
   let current = "";
@@ -87,7 +87,7 @@ export async function translateReportWithMetadata(
       {
         provider: options?.provider ?? "local",
         temperature: 0.1,
-        maxTokens: 3200,
+        maxTokens: 1500,
         timeoutMs: Number.parseInt(process.env.LOCAL_LLM_TRANSLATION_TIMEOUT_MS ?? "900000", 10),
         model: process.env.LOCAL_LLM_TRANSLATION_MODEL?.trim() || undefined,
       },
