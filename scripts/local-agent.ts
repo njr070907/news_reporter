@@ -15,6 +15,8 @@ interface AgentConfig {
   schedule: LocalSchedule;
   adminLoginAt: string | null;
   missingTopicIds: string[];
+  missingTranslationTopicIds: string[];
+  pendingCount: number;
   shouldRun: boolean;
 }
 
@@ -96,13 +98,17 @@ async function check(event: "login" | "poll"): Promise<void> {
   if (config.schedule.runNowAt) lastRunNowAt = config.schedule.runNowAt;
 
   const shouldRun = config.shouldRun || newAdminLogin || newManualRequest;
-  if (!shouldRun || config.missingTopicIds.length === 0 || running || Date.now() < retryAfter) {
+  const pendingCount = config.pendingCount ?? new Set([
+    ...config.missingTopicIds,
+    ...(config.missingTranslationTopicIds ?? []),
+  ]).size;
+  if (!shouldRun || pendingCount === 0 || running || Date.now() < retryAfter) {
     return;
   }
 
   running = true;
   console.log(
-    `本地代理开始上传：${config.date} · 待处理主题 ${config.missingTopicIds.length} · 触发 ${
+    `本地代理开始上传：${config.date} · 待处理主题 ${pendingCount} · 触发 ${
       newAdminLogin ? "管理员登录" : newManualRequest ? "手动请求" : event === "login" ? "Windows 登录" : "定时"
     }`,
   );

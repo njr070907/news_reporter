@@ -52,7 +52,9 @@ When the result looks good, run:
 npm run report:local
 ```
 
-Run `npm run report:local:agent` in Windows Task Scheduler with an **At log on** trigger. The agent starts with Windows, checks the administrator's saved schedule every five minutes, and only generates topics whose current-day report is missing. The old GitHub Actions schedule is now manual-only to avoid generating the same reports twice; the workflow remains available for emergency fallback.
+Run `npm run report:local:agent` in Windows Task Scheduler with an **At log on** trigger. The agent starts with Windows, checks the administrator's saved schedule every five minutes, and only generates topics whose current-day report or English version is missing. English translations are also generated locally and cached on the website, so readers never connect to Ollama directly. The old GitHub Actions schedule is now manual-only to avoid generating the same reports twice; the workflow remains available for emergency fallback.
+
+The Topics page includes instant search across topic names and keywords. The Briefings page is grouped behind a date navigator: readers select a date first, then see only that date's reports. Each report can switch between the original Chinese and the locally prepared English version when available.
 
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 

@@ -10,9 +10,20 @@ interface Props {
   reportId: string;
   sources: ReportSource[];
   sections: Section[];
+  englishSections: Section[] | null;
 }
 
-const NO_THUMB_TITLES = new Set(["", "今日要点", "本周要点", "信源清单"]);
+const NO_THUMB_TITLES = new Set([
+  "",
+  "今日要点",
+  "本周要点",
+  "信源清单",
+  "Today's Highlights",
+  "This Week's Highlights",
+  "Today's Key Points",
+  "This Week's Key Points",
+  "Sources",
+]);
 
 async function sendFeedback(
   reportId: string,
@@ -37,9 +48,16 @@ function citedSids(body: string): string[] {
   return out;
 }
 
-export default function ReportView({ reportId, sources, sections }: Props) {
+export default function ReportView({
+  reportId,
+  sources,
+  sections,
+  englishSections,
+}: Props) {
   const [dailyRating, setDailyRating] = useState<number | null>(null);
   const [rated, setRated] = useState<Record<string, boolean>>({});
+  const [language, setLanguage] = useState<"original" | "english">("original");
+  const displayedSections = language === "english" && englishSections ? englishSections : sections;
 
   const bySid = useMemo(() => {
     const map: Record<string, ReportSource> = {};
@@ -86,9 +104,53 @@ export default function ReportView({ reportId, sources, sections }: Props) {
         )}
       </div>
 
+      {/* Language switcher */}
+      <div className="mb-8 flex flex-wrap items-center justify-between gap-3">
+        <div
+          className="inline-flex rounded-full border border-border bg-[var(--surface-solid)] p-1"
+          role="tablist"
+          aria-label="Report language"
+        >
+          <button
+            type="button"
+            role="tab"
+            aria-selected={language === "original"}
+            onClick={() => setLanguage("original")}
+            className={`rounded-full px-4 py-2 text-[12px] font-medium transition-colors ${
+              language === "original"
+                ? "bg-[var(--text-primary)] text-[var(--surface-solid)]"
+                : "text-text-secondary hover:text-text-primary"
+            }`}
+          >
+            原文
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={language === "english"}
+            disabled={!englishSections}
+            onClick={() => setLanguage("english")}
+            className={`rounded-full px-4 py-2 text-[12px] font-medium transition-colors ${
+              language === "english"
+                ? "bg-[var(--text-primary)] text-[var(--surface-solid)]"
+                : englishSections
+                  ? "text-text-secondary hover:text-text-primary"
+                  : "cursor-not-allowed text-text-tertiary/60"
+            }`}
+          >
+            English
+          </button>
+        </div>
+        {!englishSections && (
+          <span className="text-[12px] text-text-tertiary">
+            English version is being prepared locally.
+          </span>
+        )}
+      </div>
+
       {/* Report body */}
       <div className="report-body" onClick={trackSourceClick}>
-        {sections.map((sec, idx) => {
+        {displayedSections.map((sec, idx) => {
           const showThumb = !NO_THUMB_TITLES.has(sec.title);
           const imageSrc = showThumb
             ? citedSids(sec.body)

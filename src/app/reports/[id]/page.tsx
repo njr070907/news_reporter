@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
-import { getReportForUser } from "@/lib/db";
+import { getReportForUser, getReportTranslationForUser } from "@/lib/db";
 import type { ReportSource } from "@/lib/types";
 import ReportView from "./ReportView";
 
@@ -46,6 +46,8 @@ export default async function ReportDetailPage({
 
   const sources = JSON.parse(report.sources_json) as ReportSource[];
   const sections = splitSections(report.markdown);
+  const translation = await getReportTranslationForUser(report.id, user.id, "en");
+  const englishSections = translation ? splitSections(translation.markdown) : null;
 
   const createdTime = new Date(
     new Date(report.created_at).getTime() + 8 * 3600000
@@ -128,6 +130,7 @@ export default async function ReportDetailPage({
         reportId={report.id}
         sources={sources}
         sections={sections}
+        englishSections={englishSections}
       />
     </article>
   );

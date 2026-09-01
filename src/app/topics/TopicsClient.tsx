@@ -48,6 +48,7 @@ export default function TopicsClient({ initialTopics }: Props) {
   const [composerOpen, setComposerOpen] = useState(false);
   const [llmOptions, setLlmOptions] = useState<LlmOptionsResponse | null>(null);
   const [selectedProvider, setSelectedProvider] = useState<LlmProvider | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
     const controller = new AbortController();
@@ -74,8 +75,34 @@ export default function TopicsClient({ initialTopics }: Props) {
   }, []);
 
   const presetNames = useMemo(() => new Set(topics.map((t) => t.name)), [topics]);
-  const availablePresets = PRESET_TOPICS.filter((p) => !presetNames.has(p.name));
+  const availablePresets = useMemo(
+    () => PRESET_TOPICS.filter((p) => !presetNames.has(p.name)),
+    [presetNames],
+  );
+  const normalizedSearch = searchQuery.trim().toLocaleLowerCase();
+  const filteredTopics = useMemo(
+    () =>
+      topics.filter((topic) =>
+        !normalizedSearch ||
+        [topic.name, ...topic.keywordsZh, ...topic.keywordsEn].some((value) =>
+          value.toLocaleLowerCase().includes(normalizedSearch),
+        ),
+      ),
+    [normalizedSearch, topics],
+  );
+  const filteredPresets = useMemo(
+    () =>
+      availablePresets.filter(
+        (preset) =>
+          !normalizedSearch ||
+          [preset.name, ...preset.keywordsZh, ...preset.keywordsEn].some((value) =>
+            value.toLocaleLowerCase().includes(normalizedSearch),
+          ),
+      ),
+    [availablePresets, normalizedSearch],
+  );
   const activeTopics = topics.filter((t) => t.active);
+  const visibleActiveCount = filteredTopics.filter((t) => t.active).length;
 
   async function toggleActive(topic: TopicItem) {
     setTopics((ts) =>
@@ -223,6 +250,48 @@ export default function TopicsClient({ initialTopics }: Props) {
         <p className="mt-2 text-[15px] text-text-secondary">
           {topics.length} topics shaping your briefing.
         </p>
+        <div className="relative mt-5 max-w-xl">
+          <svg
+            className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-text-tertiary"
+            width="17"
+            height="17"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <circle cx="11" cy="11" r="7" />
+            <path d="m20 20-4-4" />
+          </svg>
+          <input
+            type="search"
+            aria-label="Search topics"
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            placeholder="搜索主题或关键词 / Search topics..."
+            className="input-apple w-full pl-11 pr-11"
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              aria-label="Clear topic search"
+              onClick={() => setSearchQuery("")}
+              className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-1 text-text-tertiary transition-colors hover:bg-black/[0.05] hover:text-text-primary dark:hover:bg-white/[0.08]"
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <path d="m6 6 12 12M18 6 6 18" />
+              </svg>
+            </button>
+          )}
+        </div>
+        {normalizedSearch && (
+          <p className="mt-2 text-[12px] text-text-tertiary">
+            找到 {filteredTopics.length + filteredPresets.length} 个匹配项
+          </p>
+        )}
       </div>
 
       {/* LLM selection */}
@@ -322,7 +391,7 @@ export default function TopicsClient({ initialTopics }: Props) {
             All Topics
           </h2>
           <span className="text-[13px] text-text-tertiary">
-            {activeTopics.length} active
+            {visibleActiveCount} active
           </span>
         </div>
 
@@ -332,9 +401,22 @@ export default function TopicsClient({ initialTopics }: Props) {
               No topics yet. Choose from suggestions below or create a custom one.
             </p>
           </div>
+        ) : filteredTopics.length === 0 ? (
+          <div className="rounded-[var(--radius-lg)] border border-dashed border-border py-12 text-center">
+            <p className="text-[14px] text-text-secondary">
+              没有找到匹配的主题或关键词。
+            </p>
+            <button
+              type="button"
+              onClick={() => setSearchQuery("")}
+              className="mt-3 text-[13px] font-medium text-[var(--accent)] hover:underline"
+            >
+              清除搜索
+            </button>
+          </div>
         ) : (
           <div className="space-y-2">
-            {topics.map((t) => (
+            {filteredTopics.map((t) => (
               <div
                 key={t.id}
                 className={`group flex flex-wrap items-center gap-4 rounded-[var(--radius-lg)] border px-5 py-4 transition-all duration-280 ${
@@ -402,13 +484,13 @@ export default function TopicsClient({ initialTopics }: Props) {
       </section>
 
       {/* Preset suggestions */}
-      {availablePresets.length > 0 && (
+      {filteredPresets.length > 0 && (
         <section>
           <h2 className="mb-3 text-[13px] font-medium uppercase tracking-wider text-text-tertiary">
             Suggested Topics
           </h2>
           <div className="flex flex-wrap gap-2">
-            {availablePresets.map((p) => (
+            {filteredPresets.map((p) => (
               <button
                 key={p.name}
                 onClick={() => addPreset(p.name)}

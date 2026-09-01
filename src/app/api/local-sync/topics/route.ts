@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
-import { listActiveTopicsAll, listMissingActiveTopicIds } from "@/lib/db";
+import {
+  listActiveTopicsAll,
+  listMissingActiveTopicIds,
+  listMissingActiveTranslationTopicIds,
+} from "@/lib/db";
 import { isLocalSyncRequestAuthorized, requireLocalSyncSecret } from "@/lib/local-sync";
 import { todayLocal } from "@/lib/date";
 
@@ -19,13 +23,15 @@ export async function GET(req: Request): Promise<NextResponse> {
   }
 
   const date = todayLocal();
-  const [topics, missingTopicIds] = await Promise.all([
+  const [topics, missingTopicIds, missingTranslationTopicIds] = await Promise.all([
     listActiveTopicsAll(),
     listMissingActiveTopicIds(date),
+    listMissingActiveTranslationTopicIds(date, "en"),
   ]);
   return NextResponse.json({
     date,
     missingTopicIds,
+    missingTranslationTopicIds,
     topics: topics.map((topic) => ({
       id: topic.id,
       name: topic.name,

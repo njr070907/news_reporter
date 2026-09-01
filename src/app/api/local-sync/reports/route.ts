@@ -1,10 +1,43 @@
 import { NextResponse } from "next/server";
-import { getTopicById, saveReport } from "@/lib/db";
+import { findReportByPeriod, getTopicById, saveReport } from "@/lib/db";
 import { isLocalSyncRequestAuthorized, requireLocalSyncSecret } from "@/lib/local-sync";
 import type { LlmProvider } from "@/lib/llm";
 import type { ReportSource } from "@/lib/types";
 
 export const runtime = "nodejs";
+
+export async function GET(req: Request): Promise<NextResponse> {
+  try {
+    requireLocalSyncSecret();
+  } catch (err) {
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "同步服务未配置" },
+      { status: 500 },
+    );
+  }
+  if (!isLocalSyncRequestAuthorized(req)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const params = new URL(req.url).searchParams;
+  const topicId = params.get("topicId");
+  const date = params.get("date");
+  const rangeDays = Number(params.get("rangeDays") ?? "1");
+  if (!topicId || !validDate(date) || rangeDays !== 1) {
+    return NextResponse.json({ error: "查询参数错误" }, { status: 400 });
+  }
+
+  const report = await findReportByPeriod(topicId, date, rangeDays);
+  if (!report) return NextResponse.json({ error: "报告不存在" }, { status: 404 });
+  return NextResponse.json({
+    report: {
+      id: report.id,
+      topicId: report.topic_id,
+      date: report.date,
+      markdown: report.markdown,
+    },
+  });
+}
 
 interface UploadReportBody {
   topicId?: string;

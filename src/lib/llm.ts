@@ -23,6 +23,7 @@ export interface ChatOptions {
   temperature?: number;
   provider?: LlmProvider;
   timeoutMs?: number;
+  maxTokens?: number;
 }
 
 interface ChatResult {
@@ -150,7 +151,7 @@ async function callLocal(
   const { system, prompt } = localPrompt(messages);
   const timeoutMs = opts.timeoutMs ?? envInt("LOCAL_LLM_TIMEOUT_MS", 180000, 10000, 600000);
   const numCtx = envInt("LOCAL_LLM_NUM_CTX", 16384, 2048, 65536);
-  const numPredict = envInt("LOCAL_LLM_NUM_PREDICT", 2800, 256, 12000);
+  const numPredict = opts.maxTokens ?? envInt("LOCAL_LLM_NUM_PREDICT", 2800, 256, 12000);
   const think = envBool("LOCAL_LLM_THINK", false);
   const res = await fetch(`${config.baseUrl.replace(/\/v1$/, "")}/api/generate`, {
     method: "POST",
@@ -198,6 +199,7 @@ async function callRemote(
       model: config.model,
       messages,
       temperature: opts.temperature ?? 0.3,
+      ...(opts.maxTokens ? { max_tokens: opts.maxTokens } : {}),
     }),
     signal: AbortSignal.timeout(timeoutMs),
   });
