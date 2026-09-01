@@ -1,3 +1,5 @@
+import { closeSync, existsSync, mkdirSync, openSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import path from "node:path";
 import { loadEnvFile } from "../src/lib/env";
 import { createLocalSyncHeaders } from "../src/lib/local-sync";
 import { runPipeline, NoArticlesError, type PipelineResult } from "../src/lib/pipeline";
@@ -32,6 +34,41 @@ interface TranslationResult {
     model: string;
     generationMs: number;
   };
+}
+
+function acquireDailyLock(): boolean {
+  const dataDir = path.join(process.cwd(), "data");
+  const lockPath = path.join(dataDir, "local-daily.lock");
+  mkdirSync(dataDir, { recursive: true });
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const fd = openSync(lockPath, "wx");
+      writeFileSync(fd, String(process.pid), "utf8");
+      closeSync(fd);
+      process.once("exit", () => {
+        try {
+          unlinkSync(lockPath);
+        } catch {}
+      });
+      return true;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+      if (!existsSync(lockPath)) continue;
+      const ownerPid = Number.parseInt(readFileSync(lockPath, "utf8"), 10);
+      if (Number.isInteger(ownerPid) && ownerPid > 0) {
+        try {
+          process.kill(ownerPid, 0);
+          return false;
+        } catch {}
+      }
+      try {
+        unlinkSync(lockPath);
+      } catch {
+        return false;
+      }
+    }
+  }
+  return false;
 }
 
 async function jsonResponse<T>(res: Response): Promise<T> {
@@ -132,6 +169,10 @@ async function uploadTranslation(
 
 async function main(): Promise<void> {
   loadEnvFile();
+  if (!acquireDailyLock()) {
+    console.log("已有本地报告任务正在运行，跳过本次启动");
+    return;
+  }
   const site = baseUrl();
   const secret = process.env.LOCAL_SYNC_SECRET?.trim();
   if (!secret) throw new Error("缺少 LOCAL_SYNC_SECRET：请配置本地报告同步密钥");
