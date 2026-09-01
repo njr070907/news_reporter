@@ -37,6 +37,17 @@ CREATE TABLE IF NOT EXISTS report_translations(
   llm_model TEXT NOT NULL DEFAULT '',
   generation_ms INTEGER
 );
+CREATE TABLE IF NOT EXISTS report_section_translations(
+  id TEXT PRIMARY KEY,
+  report_id TEXT NOT NULL REFERENCES reports(id) ON DELETE CASCADE,
+  section_index INTEGER NOT NULL,
+  language TEXT NOT NULL,
+  markdown TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  llm_provider TEXT NOT NULL DEFAULT 'local',
+  llm_model TEXT NOT NULL DEFAULT '',
+  generation_ms INTEGER
+);
 CREATE TABLE IF NOT EXISTS feedback(
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL,
@@ -55,5 +66,7 @@ CREATE INDEX IF NOT EXISTS idx_topics_user ON topics(user_id);
 CREATE INDEX IF NOT EXISTS idx_reports_topic ON reports(topic_id, date DESC);
 CREATE UNIQUE INDEX IF NOT EXISTS ux_report_translations_report_language
   ON report_translations(report_id, language);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_report_section_translations_report_section_language
+  ON report_section_translations(report_id, section_index, language);
 CREATE INDEX IF NOT EXISTS idx_feedback_user ON feedback(user_id, created_at DESC);
 `;

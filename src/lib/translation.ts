@@ -1,13 +1,12 @@
 import { chatWithMetadata, type LlmGeneration, type LlmProvider } from "./llm";
 
-const TRANSLATION_SYSTEM_PROMPT = `You are a precise Chinese-to-English news editor.
-Translate the supplied Markdown report into natural, professional English.
+const ARTICLE_TRANSLATION_SYSTEM_PROMPT = `You translate one Chinese news briefing section into accurate, natural English.
+This section summarizes an article originally published in English.
 
 Hard rules:
-1. Translate only the report between the delimiters. Do not add, remove, summarize, or interpret facts.
-2. Preserve the complete Markdown structure, including every heading, bullet, blockquote, bold marker, source ID such as [S1], URL, number, date, and citation link. Never translate or alter URLs.
-3. Translate Chinese headings, prose, source titles, and labels; keep proper nouns in their standard English form when obvious.
-4. Output only the translated Markdown. Do not wrap it in a code fence or add an explanation.`;
+1. Translate only the supplied Markdown section. Do not add facts, omit facts, or summarize further.
+2. Preserve the heading, paragraph breaks, Markdown markers, source IDs such as [S1], URLs, numbers, dates, quotations, and citation links exactly. Never alter URLs or source IDs.
+3. Output only the translated Markdown, with no code fence or explanation.`;
 
 function cleanMarkdown(markdown: string): string {
   return markdown
@@ -15,32 +14,6 @@ function cleanMarkdown(markdown: string): string {
     .replace(/\s*```\s*$/i, "")
     .replace(/^# (?!#)/gm, "## ")
     .trim();
-}
-
-function splitSourceList(markdown: string): { body: string; sourceList: string } {
-  const sourceIndex = markdown.search(/^##\s+信源清单\s*$/m);
-  if (sourceIndex < 0) return { body: markdown, sourceList: "" };
-  const body = markdown.slice(0, sourceIndex).trim();
-  const sourceList = markdown
-    .slice(sourceIndex)
-    .replace(/^##\s+信源清单\s*$/m, "## Sources")
-    .trim();
-  return { body, sourceList };
-}
-
-function splitTranslationChunks(markdown: string, maxChars = 2600): string[] {
-  const sections = markdown.split(/(?=^##\s+)/gm).filter((section) => section.trim());
-  const chunks: string[] = [];
-  let current = "";
-  for (const section of sections) {
-    if (current && current.length + section.length + 2 > maxChars) {
-      chunks.push(current.trim());
-      current = "";
-    }
-    current = current ? `${current}\n\n${section}` : section;
-  }
-  if (current.trim()) chunks.push(current.trim());
-  return chunks.length > 0 ? chunks : [markdown];
 }
 
 function sourceIds(markdown: string): string[] {
@@ -51,7 +24,7 @@ function urls(markdown: string): string[] {
   return Array.from(new Set(markdown.match(/https?:\/\/[^\s)]+/g) ?? []));
 }
 
-function validateTranslation(original: string, translated: string): void {
+function validateArticleTranslation(original: string, translated: string): void {
   if (translated.length < 80 || !/^##\s+/m.test(translated)) {
     throw new Error("英文翻译格式不完整");
   }
@@ -67,63 +40,30 @@ function validateTranslation(original: string, translated: string): void {
   }
 }
 
-function validateChunk(original: string, translated: string): void {
-  if (!/^##\s+/m.test(translated)) {
-    throw new Error("英文翻译分段格式不完整");
-  }
-  for (const sid of sourceIds(original)) {
-    if (!translated.includes(sid)) {
-      throw new Error(`英文翻译分段缺少来源编号 ${sid}`);
-    }
-  }
-  for (const url of urls(original)) {
-    if (!translated.includes(url)) {
-      throw new Error("英文翻译分段改动了来源链接");
-    }
-  }
-}
-
-export async function translateReportWithMetadata(
+export async function translateArticleSectionWithMetadata(
   markdown: string,
   options?: { provider?: LlmProvider },
 ): Promise<{ markdown: string; generation: LlmGeneration }> {
-  const { body, sourceList } = splitSourceList(markdown);
-  const chunks = splitTranslationChunks(body);
-  const translatedChunks: string[] = [];
-  let generation: LlmGeneration | null = null;
-  for (const chunk of chunks) {
-    const result = await chatWithMetadata(
-      [
-        { role: "system", content: TRANSLATION_SYSTEM_PROMPT },
-        {
-          role: "user",
-          content: `<report>\n${chunk}\n</report>`,
-        },
-      ],
+  const result = await chatWithMetadata(
+    [
+      { role: "system", content: ARTICLE_TRANSLATION_SYSTEM_PROMPT },
       {
-        provider: options?.provider ?? "local",
-        temperature: 0.1,
-        maxTokens: 1500,
-        timeoutMs: Number.parseInt(process.env.LOCAL_LLM_TRANSLATION_TIMEOUT_MS ?? "900000", 10),
-        model: process.env.LOCAL_LLM_TRANSLATION_MODEL?.trim() || undefined,
+        role: "user",
+        content: `<article-section>\n${markdown}\n</article-section>`,
       },
-    );
-    const translatedChunk = cleanMarkdown(result.content);
-    validateChunk(chunk, translatedChunk);
-    translatedChunks.push(translatedChunk);
-    if (generation) {
-      const previousGeneration: LlmGeneration = generation;
-      generation = {
-        ...previousGeneration,
-        generationMs: previousGeneration.generationMs + result.generation.generationMs,
-      };
-    } else {
-      generation = result.generation;
-    }
-  }
-  const translated = [translatedChunks.join("\n\n"), sourceList]
-    .filter(Boolean)
-    .join("\n\n");
-  validateTranslation(markdown, translated);
-  return { markdown: translated, generation: generation! };
+    ],
+    {
+      provider: options?.provider ?? "local",
+      temperature: 0.1,
+      maxTokens: 1200,
+      timeoutMs: Number.parseInt(
+        process.env.LOCAL_LLM_TRANSLATION_TIMEOUT_MS ?? "180000",
+        10,
+      ),
+      model: process.env.LOCAL_LLM_TRANSLATION_MODEL?.trim() || undefined,
+    },
+  );
+  const translated = cleanMarkdown(result.content);
+  validateArticleTranslation(markdown, translated);
+  return { markdown: translated, generation: result.generation };
 }

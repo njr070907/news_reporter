@@ -1,5 +1,7 @@
 import { sqliteDriver } from "./drivers/sqlite";
 import { postgresDriver } from "./drivers/postgres";
+import { getEnglishSectionIndexes } from "./report-sections";
+import type { ReportSource } from "./types";
 
 export interface UserRow {
   id: string;
@@ -35,6 +37,18 @@ export interface ReportRow {
 export interface ReportTranslationRow {
   id: string;
   report_id: string;
+  language: string;
+  markdown: string;
+  created_at: string;
+  llm_provider: "local" | "remote";
+  llm_model: string;
+  generation_ms: number | null;
+}
+
+export interface ReportSectionTranslationRow {
+  id: string;
+  report_id: string;
+  section_index: number;
   language: string;
   markdown: string;
   created_at: string;
@@ -172,6 +186,65 @@ export async function listMissingActiveTranslationTopicIds(
   return rows.map((row) => row.id);
 }
 
+export async function listMissingActiveSectionTranslationTopicIds(
+  date: string,
+  language = "en",
+): Promise<string[]> {
+  const db = await getDriver();
+  const rows = await db.all<{
+    topic_id: string;
+    report_id: string;
+    markdown: string;
+    sources_json: string;
+    section_index: number | null;
+  }>(
+    `SELECT r.topic_id, r.id AS report_id, r.markdown, r.sources_json,
+            rst.section_index
+     FROM topics t
+     JOIN reports r
+       ON r.topic_id = t.id AND r.date = ? AND r.range_days = 1
+     LEFT JOIN report_section_translations rst
+       ON rst.report_id = r.id AND rst.language = ?
+     WHERE t.active = 1
+     ORDER BY t.created_at ASC`,
+    [date, language],
+  );
+  const states = new Map<
+    string,
+    {
+      reportId: string;
+      markdown: string;
+      sourcesJson: string;
+      translated: Set<number>;
+    }
+  >();
+  for (const row of rows) {
+    const state = states.get(row.topic_id) ?? {
+      reportId: row.report_id,
+      markdown: row.markdown,
+      sourcesJson: row.sources_json,
+      translated: new Set<number>(),
+    };
+    if (row.section_index !== null) state.translated.add(row.section_index);
+    states.set(row.topic_id, state);
+  }
+
+  const missing: string[] = [];
+  for (const [topicId, state] of states) {
+    let sources: ReportSource[];
+    try {
+      sources = JSON.parse(state.sourcesJson) as ReportSource[];
+    } catch {
+      continue;
+    }
+    const expected = getEnglishSectionIndexes(state.markdown, sources);
+    if (expected.some((index) => !state.translated.has(index))) {
+      missing.push(topicId);
+    }
+  }
+  return missing;
+}
+
 export async function getAppSetting(key: string): Promise<string | undefined> {
   const db = await getDriver();
   const row = await db.get<{ value: string }>(
@@ -246,6 +319,10 @@ export async function deleteTopic(topicId: string, userId: string): Promise<bool
   );
   if (!r || r.count === 0) return false;
   await db.run(
+    "DELETE FROM report_section_translations WHERE report_id IN (SELECT id FROM reports WHERE topic_id = ?)",
+    [topicId],
+  );
+  await db.run(
     "DELETE FROM report_translations WHERE report_id IN (SELECT id FROM reports WHERE topic_id = ?)",
     [topicId],
   );
@@ -284,6 +361,7 @@ export async function saveReport(input: {
   const existing = await findReportByPeriod(input.topicId, input.date, input.rangeDays);
   const db = await getDriver();
   if (existing) {
+    await db.run("DELETE FROM report_section_translations WHERE report_id = ?", [existing.id]);
     await db.run("DELETE FROM report_translations WHERE report_id = ?", [existing.id]);
     await db.run(
       "UPDATE reports SET markdown = ?, sources_json = ?, created_at = ?, llm_provider = ?, llm_model = ?, generation_ms = ? WHERE id = ?",
@@ -415,6 +493,119 @@ export async function saveReportTranslation(input: {
     [
       row.id,
       row.report_id,
+      row.language,
+      row.markdown,
+      row.created_at,
+      row.llm_provider,
+      row.llm_model,
+      row.generation_ms,
+    ],
+  );
+  return row;
+}
+
+export async function listReportSectionTranslationIndexes(
+  reportId: string,
+  language = "en",
+): Promise<number[]> {
+  const db = await getDriver();
+  const rows = await db.all<{ section_index: number }>(
+    "SELECT section_index FROM report_section_translations WHERE report_id = ? AND language = ? ORDER BY section_index ASC",
+    [reportId, language],
+  );
+  return rows.map((row) => row.section_index);
+}
+
+export async function getReportSectionTranslation(
+  reportId: string,
+  sectionIndex: number,
+  language: string,
+): Promise<ReportSectionTranslationRow | undefined> {
+  const db = await getDriver();
+  return db.get<ReportSectionTranslationRow>(
+    `SELECT * FROM report_section_translations
+     WHERE report_id = ? AND section_index = ? AND language = ?`,
+    [reportId, sectionIndex, language],
+  );
+}
+
+export async function getReportSectionTranslationsForUser(
+  reportId: string,
+  userId: string,
+  language: string,
+): Promise<ReportSectionTranslationRow[]> {
+  const db = await getDriver();
+  return db.all<ReportSectionTranslationRow>(
+    `SELECT rst.*
+     FROM report_section_translations rst
+     JOIN reports r ON r.id = rst.report_id
+     JOIN topics t ON t.id = r.topic_id
+     WHERE rst.report_id = ? AND rst.language = ? AND t.user_id = ?
+     ORDER BY rst.section_index ASC`,
+    [reportId, language, userId],
+  );
+}
+
+export async function saveReportSectionTranslation(input: {
+  reportId: string;
+  sectionIndex: number;
+  language: string;
+  markdown: string;
+  llmProvider?: "local" | "remote";
+  llmModel?: string;
+  generationMs?: number;
+}): Promise<ReportSectionTranslationRow> {
+  const existing = await getReportSectionTranslation(
+    input.reportId,
+    input.sectionIndex,
+    input.language,
+  );
+  const db = await getDriver();
+  const createdAt = nowIso();
+  if (existing) {
+    await db.run(
+      `UPDATE report_section_translations
+       SET markdown = ?, created_at = ?, llm_provider = ?, llm_model = ?, generation_ms = ?
+       WHERE id = ?`,
+      [
+        input.markdown,
+        createdAt,
+        input.llmProvider ?? existing.llm_provider,
+        input.llmModel ?? existing.llm_model,
+        input.generationMs ?? existing.generation_ms,
+        existing.id,
+      ],
+    );
+    return {
+      ...existing,
+      markdown: input.markdown,
+      created_at: createdAt,
+      llm_provider: input.llmProvider ?? existing.llm_provider,
+      llm_model: input.llmModel ?? existing.llm_model,
+      generation_ms: input.generationMs ?? existing.generation_ms,
+    };
+  }
+
+  const row: ReportSectionTranslationRow = {
+    id: crypto.randomUUID(),
+    report_id: input.reportId,
+    section_index: input.sectionIndex,
+    language: input.language,
+    markdown: input.markdown,
+    created_at: createdAt,
+    llm_provider: input.llmProvider ?? "local",
+    llm_model: input.llmModel ?? "",
+    generation_ms: input.generationMs ?? null,
+  };
+  await db.run(
+    `INSERT INTO report_section_translations(
+       id, report_id, section_index, language, markdown, created_at,
+       llm_provider, llm_model, generation_ms
+     ) VALUES(?,?,?,?,?,?,?,?,?)`,
+    [
+      row.id,
+      row.report_id,
+      row.section_index,
       row.language,
       row.markdown,
       row.created_at,

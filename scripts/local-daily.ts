@@ -3,7 +3,13 @@ import path from "node:path";
 import { loadEnvFile } from "../src/lib/env";
 import { createLocalSyncHeaders } from "../src/lib/local-sync";
 import { runPipeline, NoArticlesError, type PipelineResult } from "../src/lib/pipeline";
-import { translateReportWithMetadata } from "../src/lib/translation";
+import {
+  getEnglishSectionIndexes,
+  sectionMarkdown,
+  splitReportSections,
+} from "../src/lib/report-sections";
+import { translateArticleSectionWithMetadata } from "../src/lib/translation";
+import type { ReportSource } from "../src/lib/types";
 
 interface SyncTopic {
   id: string;
@@ -16,7 +22,7 @@ interface TopicsResponse {
   date: string;
   topics: SyncTopic[];
   missingTopicIds?: string[];
-  missingTranslationTopicIds?: string[];
+  missingSectionTranslationTopicIds?: string[];
   error?: string;
 }
 
@@ -25,6 +31,8 @@ interface SyncReport {
   topicId: string;
   date: string;
   markdown: string;
+  sources: ReportSource[];
+  translatedSectionIndexes: number[];
 }
 
 interface TranslationResult {
@@ -88,9 +96,7 @@ async function jsonResponse<T>(res: Response): Promise<T> {
 
 function baseUrl(): string {
   const value = process.env.LOCAL_SYNC_BASE_URL?.trim();
-  if (!value) {
-    throw new Error("缺少 LOCAL_SYNC_BASE_URL：请配置网站地址");
-  }
+  if (!value) throw new Error("缺少 LOCAL_SYNC_BASE_URL：请配置网站地址");
   return value.replace(/\/+$/, "");
 }
 
@@ -144,27 +150,36 @@ async function fetchReport(
   return data.report;
 }
 
-async function uploadTranslation(
+async function uploadSectionTranslation(
   site: string,
   secret: string,
   reportId: string,
+  sectionIndex: number,
   translated: TranslationResult,
 ): Promise<void> {
   const payload = JSON.stringify({
     reportId,
+    sectionIndex,
     language: "en",
     markdown: translated.markdown,
     llmProvider: translated.generation.provider,
     llmModel: translated.generation.model,
     generationMs: translated.generation.generationMs,
   });
-  const upload = await fetch(`${site}/api/local-sync/translations`, {
+  const upload = await fetch(`${site}/api/local-sync/section-translations`, {
     method: "POST",
     headers: createLocalSyncHeaders(payload, secret),
     body: payload,
     signal: AbortSignal.timeout(30_000),
   });
   await jsonResponse<{ translationId: string }>(upload);
+}
+
+function missingSectionIndexes(report: SyncReport): number[] {
+  const translated = new Set(report.translatedSectionIndexes ?? []);
+  return getEnglishSectionIndexes(report.markdown, report.sources).filter(
+    (index) => !translated.has(index),
+  );
 }
 
 async function main(): Promise<void> {
@@ -189,31 +204,32 @@ async function main(): Promise<void> {
       ? data.topics.map((topic) => topic.id)
       : (data.missingTopicIds ?? data.topics.map((topic) => topic.id)),
   );
-  const translationIdsToGenerate = new Set(
-    force ? data.topics.map((topic) => topic.id) : (data.missingTranslationTopicIds ?? []),
+  const sectionTranslationIdsToGenerate = new Set(
+    force ? data.topics.map((topic) => topic.id) : (data.missingSectionTranslationTopicIds ?? []),
   );
   const pendingIds = new Set([
     ...reportIdsToGenerate,
-    ...translationIdsToGenerate,
+    ...sectionTranslationIdsToGenerate,
   ]);
   const topics = data.topics.filter((topic) => pendingIds.has(topic.id));
   console.log(
     `目标日期：${data.date} · 活跃主题：${data.topics.length} · 待处理：${topics.length}`,
   );
   if (topics.length === 0) {
-    console.log("今天的报告和英文版已全部准备，跳过重复生成");
+    console.log("今天的报告和英文文章翻译已全部准备，跳过重复生成");
     return;
   }
-  if (dryRun) console.log("试运行模式：不会上传报告或英文版");
+  if (dryRun) console.log("试运行模式：不会上传报告或英文文章翻译");
 
   let reportsUploaded = 0;
-  let translationsUploaded = 0;
+  let sectionsUploaded = 0;
   let failed = 0;
   const groups = new Map<string, SyncTopic[]>();
   for (const topic of topics) {
-    const group = groups.get(topicSignature(topic)) ?? [];
+    const signature = topicSignature(topic);
+    const group = groups.get(signature) ?? [];
     group.push(topic);
-    groups.set(topicSignature(topic), group);
+    groups.set(signature, group);
   }
 
   const reportCache = new Map<string, Promise<SyncReport>>();
@@ -228,7 +244,7 @@ async function main(): Promise<void> {
   const getCachedTranslation = (markdown: string): Promise<TranslationResult> => {
     const cached = translationCache.get(markdown);
     if (cached) return cached;
-    const pending = translateReportWithMetadata(markdown, { provider: "local" });
+    const pending = translateArticleSectionWithMetadata(markdown, { provider: "local" });
     translationCache.set(markdown, pending);
     return pending;
   };
@@ -236,11 +252,10 @@ async function main(): Promise<void> {
   for (const group of groups.values()) {
     const topic = group[0];
     const startedAt = Date.now();
-    const reportIds = new Map<string, string>();
-    const reportMarkdown = new Map<string, string>();
+    const reports = new Map<string, SyncReport>();
     const reportTargets = group.filter((item) => reportIdsToGenerate.has(item.id));
     const translationTargets = group.filter((item) =>
-      translationIdsToGenerate.has(item.id) || reportIdsToGenerate.has(item.id),
+      sectionTranslationIdsToGenerate.has(item.id) || reportIdsToGenerate.has(item.id),
     );
     let pipelineResult: PipelineResult | null = null;
 
@@ -281,8 +296,14 @@ async function main(): Promise<void> {
       uploads.forEach((upload, index) => {
         const item = reportTargets[index];
         if (upload.status === "fulfilled") {
-          reportIds.set(item.id, upload.value.reportId);
-          reportMarkdown.set(item.id, pipelineResult!.markdown);
+          reports.set(item.id, {
+            id: upload.value.reportId,
+            topicId: item.id,
+            date: data.date,
+            markdown: pipelineResult!.markdown,
+            sources: pipelineResult!.sources,
+            translatedSectionIndexes: [],
+          });
           reportsUploaded += 1;
         } else {
           failed += 1;
@@ -293,30 +314,26 @@ async function main(): Promise<void> {
           );
         }
       });
-    } else if (pipelineResult) {
-      for (const item of reportTargets) reportMarkdown.set(item.id, pipelineResult.markdown);
     }
 
     if (!dryRun) {
       for (const item of translationTargets) {
         try {
-          if (reportIdsToGenerate.has(item.id) && !reportIds.has(item.id)) {
-            continue;
+          if (reportIdsToGenerate.has(item.id) && !reports.has(item.id)) continue;
+          const report = reports.get(item.id) ?? (await getCachedReport(item.id, data.date));
+          const sections = splitReportSections(report.markdown);
+          const missingIndexes = missingSectionIndexes(report);
+          for (const sectionIndex of missingIndexes) {
+            const section = sections[sectionIndex];
+            if (!section) continue;
+            const translated = await getCachedTranslation(sectionMarkdown(section));
+            await uploadSectionTranslation(site, secret, report.id, sectionIndex, translated);
+            sectionsUploaded += 1;
           }
-          let reportId = reportIds.get(item.id);
-          let markdown = reportMarkdown.get(item.id);
-          if (!reportId || !markdown) {
-            const existing = await getCachedReport(item.id, data.date);
-            reportId = existing.id;
-            markdown = existing.markdown;
-          }
-          const translated = await getCachedTranslation(markdown);
-          await uploadTranslation(site, secret, reportId, translated);
-          translationsUploaded += 1;
         } catch (err) {
           failed += 1;
           console.error(
-            `英文版处理失败：${item.name} · ${
+            `英文文章处理失败：${item.name} · ${
               err instanceof Error ? err.message : String(err)
             }`,
           );
@@ -326,13 +343,13 @@ async function main(): Promise<void> {
 
     console.log(
       `完成：${topic.name} · ${Math.round((Date.now() - startedAt) / 1000)}s · ${
-        dryRun ? "试运行" : `报告 ${reportIds.size} · 英文版 ${translationTargets.length}`
+        dryRun ? "试运行" : `报告 ${reportTargets.length} · 英文文章 ${sectionsUploaded}`
       }`,
     );
   }
 
   console.log(
-    `任务结束：报告上传 ${reportsUploaded}，英文版上传 ${translationsUploaded}，失败 ${failed}`,
+    `任务结束：报告上传 ${reportsUploaded}，英文文章翻译上传 ${sectionsUploaded}，失败 ${failed}`,
   );
   if (failed > 0) process.exitCode = 1;
 }

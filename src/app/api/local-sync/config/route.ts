@@ -3,7 +3,7 @@ import { getAdminLoginAt } from "@/lib/local-schedule";
 import { getLocalDeliverySchedule } from "@/lib/local-schedule";
 import {
   listMissingActiveTopicIds,
-  listMissingActiveTranslationTopicIds,
+  listMissingActiveSectionTranslationTopicIds,
 } from "@/lib/db";
 import { todayLocal } from "@/lib/date";
 import { isLocalSyncRequestAuthorized, requireLocalSyncSecret } from "@/lib/local-sync";
@@ -36,14 +36,14 @@ export async function GET(req: Request): Promise<NextResponse> {
   }
 
   const date = todayLocal();
-  const [schedule, missingTopicIds, missingTranslationTopicIds, adminLoginAt] = await Promise.all([
+  const [schedule, missingTopicIds, missingSectionTranslationTopicIds, adminLoginAt] = await Promise.all([
     getLocalDeliverySchedule(),
     listMissingActiveTopicIds(date),
-    listMissingActiveTranslationTopicIds(date, "en"),
+    listMissingActiveSectionTranslationTopicIds(date, "en"),
     getAdminLoginAt(),
   ]);
   const pendingTopicIds = Array.from(
-    new Set([...missingTopicIds, ...missingTranslationTopicIds]),
+    new Set([...missingTopicIds, ...missingSectionTranslationTopicIds]),
   );
   const event = new URL(req.url).searchParams.get("event");
   const scheduledDue = schedule.enabled && beijingTime() >= schedule.time;
@@ -56,7 +56,7 @@ export async function GET(req: Request): Promise<NextResponse> {
     schedule,
     adminLoginAt,
     missingTopicIds,
-    missingTranslationTopicIds,
+    missingSectionTranslationTopicIds,
     pendingCount: pendingTopicIds.length,
     shouldRun: pendingTopicIds.length > 0 && (scheduledDue || loginDue || manualDue),
   });

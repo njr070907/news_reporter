@@ -10,7 +10,8 @@ interface Props {
   reportId: string;
   sources: ReportSource[];
   sections: Section[];
-  englishSections: Section[] | null;
+  englishSectionIndexes: number[];
+  sectionTranslations: Record<number, Section>;
 }
 
 const NO_THUMB_TITLES = new Set([
@@ -52,12 +53,14 @@ export default function ReportView({
   reportId,
   sources,
   sections,
-  englishSections,
+  englishSectionIndexes,
+  sectionTranslations,
 }: Props) {
   const [dailyRating, setDailyRating] = useState<number | null>(null);
   const [rated, setRated] = useState<Record<string, boolean>>({});
-  const [language, setLanguage] = useState<"original" | "english">("original");
-  const displayedSections = language === "english" && englishSections ? englishSections : sections;
+  const [sectionLanguage, setSectionLanguage] = useState<
+    Record<number, "original" | "english">
+  >({});
 
   const bySid = useMemo(() => {
     const map: Record<string, ReportSource> = {};
@@ -104,56 +107,17 @@ export default function ReportView({
         )}
       </div>
 
-      {/* Language switcher */}
-      <div className="mb-8 flex flex-wrap items-center justify-between gap-3">
-        <div
-          className="inline-flex rounded-full border border-border bg-[var(--surface-solid)] p-1"
-          role="tablist"
-          aria-label="Report language"
-        >
-          <button
-            type="button"
-            role="tab"
-            aria-selected={language === "original"}
-            onClick={() => setLanguage("original")}
-            className={`rounded-full px-4 py-2 text-[12px] font-medium transition-colors ${
-              language === "original"
-                ? "bg-[var(--text-primary)] text-[var(--surface-solid)]"
-                : "text-text-secondary hover:text-text-primary"
-            }`}
-          >
-            原文
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={language === "english"}
-            disabled={!englishSections}
-            onClick={() => setLanguage("english")}
-            className={`rounded-full px-4 py-2 text-[12px] font-medium transition-colors ${
-              language === "english"
-                ? "bg-[var(--text-primary)] text-[var(--surface-solid)]"
-                : englishSections
-                  ? "text-text-secondary hover:text-text-primary"
-                  : "cursor-not-allowed text-text-tertiary/60"
-            }`}
-          >
-            English
-          </button>
-        </div>
-        {!englishSections && (
-          <span className="text-[12px] text-text-tertiary">
-            English version is being prepared locally.
-          </span>
-        )}
-      </div>
-
       {/* Report body */}
       <div className="report-body" onClick={trackSourceClick}>
-        {displayedSections.map((sec, idx) => {
+        {sections.map((sec, idx) => {
+          const isEnglishArticle = englishSectionIndexes.includes(idx);
+          const translatedSection = sectionTranslations[idx];
+          const showingEnglish =
+            sectionLanguage[idx] === "english" && Boolean(translatedSection);
+          const displayedSection = showingEnglish ? translatedSection : sec;
           const showThumb = !NO_THUMB_TITLES.has(sec.title);
           const imageSrc = showThumb
-            ? citedSids(sec.body)
+            ? citedSids(displayedSection.body)
                 .map((sid) => bySid[sid])
                 .find((s) => s?.imageUrl)?.imageUrl
             : undefined;
@@ -166,7 +130,7 @@ export default function ReportView({
             >
               {sec.title && (
                 <div className="group flex items-start justify-between gap-4">
-                  <h2>{sec.title}</h2>
+                  <h2>{displayedSection.title}</h2>
                   {showThumb && (
                     <span className="mt-1.5 flex shrink-0 gap-0.5 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
                       <button
@@ -215,12 +179,66 @@ export default function ReportView({
                   )}
                 </div>
               )}
+              {isEnglishArticle && (
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <div
+                    className="inline-flex rounded-full border border-border bg-[var(--surface-solid)] p-1"
+                    role="tablist"
+                    aria-label={`${sec.title} language`}
+                  >
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={!showingEnglish}
+                      onClick={() =>
+                        setSectionLanguage((languages) => ({
+                          ...languages,
+                          [idx]: "original",
+                        }))
+                      }
+                      className={`rounded-full px-3 py-1.5 text-[12px] font-medium transition-colors ${
+                        !showingEnglish
+                          ? "bg-[var(--text-primary)] text-[var(--surface-solid)]"
+                          : "text-text-secondary hover:text-text-primary"
+                      }`}
+                    >
+                      原文
+                    </button>
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={showingEnglish}
+                      disabled={!translatedSection}
+                      onClick={() =>
+                        setSectionLanguage((languages) => ({
+                          ...languages,
+                          [idx]: "english",
+                        }))
+                      }
+                      className={`rounded-full px-3 py-1.5 text-[12px] font-medium transition-colors ${
+                        showingEnglish
+                          ? "bg-[var(--text-primary)] text-[var(--surface-solid)]"
+                          : translatedSection
+                            ? "text-text-secondary hover:text-text-primary"
+                            : "cursor-not-allowed text-text-tertiary/60"
+                      }`}
+                    >
+                      English
+                    </button>
+                  </div>
+                  {!translatedSection && (
+                    <span className="text-[12px] text-text-tertiary">
+                      English version is being prepared locally.
+                    </span>
+                  )}
+                </div>
+              )}
               {imageSrc && (
                 /* eslint-disable-next-line @next/next/no-img-element */
-                <img src={imageSrc} alt={`${sec.title} illustration`} loading="lazy" />
+                <img src={imageSrc} alt={`${displayedSection.title} illustration`} loading="lazy" />
               )}
               <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                {sec.body}
+                {displayedSection.body}
               </ReactMarkdown>
             </section>
           );

@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server";
-import { findReportByPeriod, getTopicById, saveReport } from "@/lib/db";
+import {
+  findReportByPeriod,
+  getTopicById,
+  listReportSectionTranslationIndexes,
+  saveReport,
+} from "@/lib/db";
 import { isLocalSyncRequestAuthorized, requireLocalSyncSecret } from "@/lib/local-sync";
 import type { LlmProvider } from "@/lib/llm";
 import type { ReportSource } from "@/lib/types";
@@ -29,12 +34,19 @@ export async function GET(req: Request): Promise<NextResponse> {
 
   const report = await findReportByPeriod(topicId, date, rangeDays);
   if (!report) return NextResponse.json({ error: "报告不存在" }, { status: 404 });
+  let sources: ReportSource[] = [];
+  try {
+    sources = JSON.parse(report.sources_json) as ReportSource[];
+  } catch {}
+  const translatedSectionIndexes = await listReportSectionTranslationIndexes(report.id, "en");
   return NextResponse.json({
     report: {
       id: report.id,
       topicId: report.topic_id,
       date: report.date,
       markdown: report.markdown,
+      sources,
+      translatedSectionIndexes,
     },
   });
 }

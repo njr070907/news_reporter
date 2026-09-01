@@ -15,7 +15,7 @@ interface AgentConfig {
   schedule: LocalSchedule;
   adminLoginAt: string | null;
   missingTopicIds: string[];
-  missingTranslationTopicIds: string[];
+  missingSectionTranslationTopicIds: string[];
   pendingCount: number;
   shouldRun: boolean;
 }
@@ -100,7 +100,7 @@ async function check(event: "login" | "poll"): Promise<void> {
   const shouldRun = config.shouldRun || newAdminLogin || newManualRequest;
   const pendingCount = config.pendingCount ?? new Set([
     ...config.missingTopicIds,
-    ...(config.missingTranslationTopicIds ?? []),
+    ...(config.missingSectionTranslationTopicIds ?? []),
   ]).size;
   if (!shouldRun || pendingCount === 0 || running || Date.now() < retryAfter) {
     return;

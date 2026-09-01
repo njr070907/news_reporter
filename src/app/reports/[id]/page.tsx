@@ -1,36 +1,19 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
-import { getReportForUser, getReportTranslationForUser } from "@/lib/db";
+import {
+  getReportForUser,
+  getReportSectionTranslationsForUser,
+} from "@/lib/db";
+import {
+  getEnglishSectionIndexes,
+  splitReportSections,
+  type ReportSection,
+} from "@/lib/report-sections";
 import type { ReportSource } from "@/lib/types";
 import ReportView from "./ReportView";
 
-export interface Section {
-  title: string;
-  body: string;
-}
-
-function splitSections(markdown: string): Section[] {
-  const lines = markdown.split(/\r?\n/);
-  const sections: Section[] = [];
-  let current: Section | null = null;
-  const rest: string[] = [];
-  for (const line of lines) {
-    if (line.startsWith("## ")) {
-      if (current) sections.push(current);
-      current = { title: line.slice(3).trim(), body: "" };
-    } else if (current) {
-      current.body += line + "\n";
-    } else {
-      rest.push(line);
-    }
-  }
-  if (current) sections.push(current);
-  if (rest.length > 0 && rest.join("").trim()) {
-    sections.unshift({ title: "", body: rest.join("\n") });
-  }
-  return sections;
-}
+export type Section = ReportSection;
 
 export default async function ReportDetailPage({
   params,
@@ -45,9 +28,18 @@ export default async function ReportDetailPage({
   if (!report) notFound();
 
   const sources = JSON.parse(report.sources_json) as ReportSource[];
-  const sections = splitSections(report.markdown);
-  const translation = await getReportTranslationForUser(report.id, user.id, "en");
-  const englishSections = translation ? splitSections(translation.markdown) : null;
+  const sections = splitReportSections(report.markdown);
+  const englishSectionIndexes = getEnglishSectionIndexes(report.markdown, sources);
+  const translations = await getReportSectionTranslationsForUser(
+    report.id,
+    user.id,
+    "en",
+  );
+  const sectionTranslations: Record<number, Section> = {};
+  for (const translation of translations) {
+    const section = splitReportSections(translation.markdown)[0];
+    if (section) sectionTranslations[translation.section_index] = section;
+  }
 
   const createdTime = new Date(
     new Date(report.created_at).getTime() + 8 * 3600000
@@ -130,7 +122,8 @@ export default async function ReportDetailPage({
         reportId={report.id}
         sources={sources}
         sections={sections}
-        englishSections={englishSections}
+        englishSectionIndexes={englishSectionIndexes}
+        sectionTranslations={sectionTranslations}
       />
     </article>
   );
