@@ -25,6 +25,8 @@ Set these variables in the local `.env.local`:
 ```bash
 LLM_PROVIDER=local
 LOCAL_LLM_MODEL=qwen3.5:0.8b
+LOCAL_LLM_TRANSLATION_MODEL=qwen3.5:4b
+LOCAL_LLM_TRANSLATION_TIMEOUT_MS=900000
 LOCAL_SYNC_BASE_URL=https://news-reporter-web-production.up.railway.app
 LOCAL_SYNC_SECRET=<same secret configured on Railway>
 ```
@@ -52,7 +54,7 @@ When the result looks good, run:
 npm run report:local
 ```
 
-Run `npm run report:local:agent` in Windows Task Scheduler with an **At log on** trigger. The agent starts with Windows, checks the administrator's saved schedule every five minutes, and only generates topics whose current-day report or English version is missing. English translations are also generated locally and cached on the website, so readers never connect to Ollama directly. The old GitHub Actions schedule is now manual-only to avoid generating the same reports twice; the workflow remains available for emergency fallback.
+Run `npm run report:local:agent` in Windows Task Scheduler with an **At log on** trigger. The agent starts with Windows, checks the administrator's saved schedule every five minutes, and only generates topics whose current-day report or English version is missing. English translations are also generated locally with the dedicated translation model and cached on the website, so readers never connect to Ollama directly. The old GitHub Actions schedule is now manual-only to avoid generating the same reports twice; the workflow remains available for emergency fallback.
 
 The Topics page includes instant search across topic names and keywords. The Briefings page is grouped behind a date navigator: readers select a date first, then see only that date's reports. Each report can switch between the original Chinese and the locally prepared English version when available.
 

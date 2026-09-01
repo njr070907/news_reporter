@@ -67,6 +67,22 @@ function validateTranslation(original: string, translated: string): void {
   }
 }
 
+function validateChunk(original: string, translated: string): void {
+  if (!/^##\s+/m.test(translated)) {
+    throw new Error("英文翻译分段格式不完整");
+  }
+  for (const sid of sourceIds(original)) {
+    if (!translated.includes(sid)) {
+      throw new Error(`英文翻译分段缺少来源编号 ${sid}`);
+    }
+  }
+  for (const url of urls(original)) {
+    if (!translated.includes(url)) {
+      throw new Error("英文翻译分段改动了来源链接");
+    }
+  }
+}
+
 export async function translateReportWithMetadata(
   markdown: string,
   options?: { provider?: LlmProvider },
@@ -93,9 +109,7 @@ export async function translateReportWithMetadata(
       },
     );
     const translatedChunk = cleanMarkdown(result.content);
-    if (!/^##\s+/m.test(translatedChunk)) {
-      throw new Error("英文翻译分段格式不完整");
-    }
+    validateChunk(chunk, translatedChunk);
     translatedChunks.push(translatedChunk);
     if (generation) {
       const previousGeneration: LlmGeneration = generation;
